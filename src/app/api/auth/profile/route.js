@@ -11,6 +11,11 @@ export async function GET(req) {
       where: {
         id: decoded.userId,
       },
+      include: {
+        college: {
+          select: { name: true }
+        }
+      }
     });
 
     if (!user) {

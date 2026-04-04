@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { registerService } from "@/services/auth.service";
+import { registerService } from "@/lib/api-client/auth.client";
 import { useAuth } from "@/context/auth-context";
 
 import { Button } from "@/components/ui/button";

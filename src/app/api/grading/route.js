@@ -1,4 +1,4 @@
-import { createDraftExam, getExamsByCreator } from "@/lib/services/exam.service.js";
+import { gradeSubjectiveAnswer } from "@/lib/services/grading.service.js";
 import { cookies } from "next/headers";
 
 function extractUserId() {
@@ -10,27 +10,20 @@ function extractUserId() {
   } catch(e) { return null; }
 }
 
-export async function GET() {
-  try {
-    const teacherId = extractUserId();
-    if (!teacherId) return Response.json({ success: false, message: "Unauthorized" }, { status: 401 });
-
-    const exams = await getExamsByCreator(teacherId);
-    return Response.json({ success: true, exams }, { status: 200 });
-  } catch (error) {
-    return Response.json({ success: false, message: error.message }, { status: 400 });
-  }
-}
-
 export async function POST(req) {
   try {
     const teacherId = extractUserId();
     if (!teacherId) return Response.json({ success: false, message: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();
-    const exam = await createDraftExam(teacherId, body);
+    const { answerId, marksObtained, feedback } = body;
     
-    return Response.json({ success: true, exam }, { status: 201 });
+    if (!answerId || marksObtained === undefined) {
+      return Response.json({ success: false, message: "Missing required fields" }, { status: 400 });
+    }
+
+    const result = await gradeSubjectiveAnswer(teacherId, answerId, parseFloat(marksObtained), feedback);
+    return Response.json(result, { status: 200 });
   } catch (error) {
     return Response.json({ success: false, message: error.message }, { status: 400 });
   }

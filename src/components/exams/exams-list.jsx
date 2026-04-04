@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getExamsService } from "@/lib/services/exam.service";
 
 import {
   Card,
@@ -19,8 +18,11 @@ export default function ExamsList() {
 
     async function fetchExams() {
       try {
-        const data = await getExamsService();
-        setExams(data);
+        const res = await fetch("/api/exams");
+        const data = await res.json();
+        if (data.success) {
+          setExams(data.exams);
+        }
       } catch (err) {
         console.error(err);
       } finally {

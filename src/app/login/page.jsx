@@ -12,7 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 
-import { loginService } from "@/services/auth.service";
+import { loginService } from "@/lib/api-client/auth.client";
 import { useAuth } from "@/context/auth-context";
 
 export default function LoginForm() {

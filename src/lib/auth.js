@@ -17,6 +17,7 @@
 export function setToken(token) {
   if (typeof window !== "undefined") {
     localStorage.setItem("token", token);
+    document.cookie = `testify-token=${token}; path=/; max-age=604800; samesite=lax`;
   }
 }
 
@@ -30,5 +31,6 @@ export function getToken() {
 export function removeToken() {
   if (typeof window !== "undefined") {
     localStorage.removeItem("token");
+    document.cookie = `testify-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
   }
 }
