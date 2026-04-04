@@ -2,12 +2,11 @@
 
 import { useAuth } from "@/context/auth-context";
 import { Button } from "@/components/ui/button";
-import { useTheme } from "next-themes";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function Header() {
 
   const { user, logout } = useAuth();
-  const { setTheme } = useTheme();
 
   return (
 
@@ -33,30 +32,15 @@ export default function Header() {
 
       </div>
 
-      {/* <div className="flex gap-2">
-
-        <Button
-          variant="outline"
-          onClick={() => setTheme("light")}
-        >
-          Light
-        </Button>
-
-        <Button
-          variant="outline"
-          onClick={() => setTheme("dark")}
-        >
-          Dark
-        </Button>
-
+      <div className="flex gap-4 items-center">
+        <ThemeToggle />
         <Button
           variant="destructive"
           onClick={logout}
         >
           Logout
         </Button>
-
-      </div> */}
+      </div>
 
     </header>
 
