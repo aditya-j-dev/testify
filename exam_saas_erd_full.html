@@ -1,0 +1,337 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans);background:transparent;color:var(--color-text-primary)}
+.erd-wrap{padding:1rem 0}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.filter-btn{font-size:11px;font-weight:500;padding:4px 10px;border-radius:6px;border:1px solid var(--color-border-secondary);background:var(--color-background-secondary);color:var(--color-text-secondary);cursor:pointer;transition:all .15s}
+.filter-btn.active{background:var(--color-background-primary);color:var(--color-text-primary);border-color:var(--color-border-primary)}
+.filter-btn:hover{border-color:var(--color-border-primary)}
+.canvas-wrap{overflow:auto;border:1px solid var(--color-border-tertiary);border-radius:12px;background:var(--color-background-secondary)}
+canvas{display:block}
+.detail-panel{margin-top:10px;border:1px solid var(--color-border-tertiary);border-radius:10px;background:var(--color-background-primary);overflow:hidden;font-size:12px}
+.dp-header{padding:10px 14px;border-bottom:1px solid var(--color-border-tertiary);display:flex;align-items:center;gap:8px}
+.dp-title{font-size:13px;font-weight:500;color:var(--color-text-primary)}
+.dp-badge{font-size:10px;font-weight:500;padding:2px 7px;border-radius:4px}
+.dp-body{padding:12px 14px}
+.dp-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.dp-field{padding:6px 8px;border-radius:6px;border:1px solid var(--color-border-tertiary);background:var(--color-background-secondary)}
+.dp-field-name{font-weight:500;color:var(--color-text-primary);font-size:11px}
+.dp-field-type{color:var(--color-text-tertiary);font-size:10px;margin-top:1px}
+.dp-field-note{color:var(--color-text-info);font-size:10px;margin-top:1px}
+.dp-rels{margin-top:10px}
+.dp-rel-title{font-size:11px;font-weight:500;color:var(--color-text-secondary);margin-bottom:5px}
+.dp-rel{font-size:11px;padding:4px 8px;border-radius:5px;background:var(--color-background-secondary);margin-bottom:3px;color:var(--color-text-secondary);cursor:pointer}
+.dp-rel:hover{background:var(--color-background-tertiary);color:var(--color-text-primary)}
+.dp-empty{color:var(--color-text-tertiary);font-size:12px;padding:8px 0}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--color-text-secondary);margin-top:10px;padding-top:8px;border-top:1px solid var(--color-border-tertiary)}
+.leg-item{display:flex;align-items:center;gap:5px}
+.leg-dot{width:10px;height:10px;border-radius:3px;flex-shrink:0}
+</style>
+
+<div class="erd-wrap">
+  <div class="toolbar" id="toolbar"></div>
+  <div class="canvas-wrap"><canvas id="erd" width="1400" height="1050"></canvas></div>
+  <div class="detail-panel" id="dp">
+    <div class="dp-header"><span class="dp-title">Click any entity to inspect its fields and relations</span></div>
+    <div class="dp-body"><p class="dp-empty">No entity selected</p></div>
+  </div>
+  <div class="legend">
+    <div class="leg-item"><div class="leg-dot" style="background:#534AB7"></div>Org / tenancy</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#0F6E56"></div>Academics</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#993C1D"></div>Exam engine</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#854F0B"></div>Attempt / answer</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#185FA5"></div>Result / grading</div>
+    <div class="leg-item"><div class="leg-dot" style="background:#5F5E5A"></div>Proctoring</div>
+  </div>
+</div>
+
+<script>
+const GROUPS = {
+  org:      {label:'Org / tenancy',   color:'#534AB7', light:'#EEEDFE'},
+  academic: {label:'Academics',       color:'#0F6E56', light:'#E1F5EE'},
+  exam:     {label:'Exam engine',     color:'#993C1D', light:'#FAECE7'},
+  attempt:  {label:'Attempt / answer',color:'#854F0B', light:'#FAEEDA'},
+  result:   {label:'Result / grading',color:'#185FA5', light:'#E6F1FB'},
+  proctor:  {label:'Proctoring',      color:'#5F5E5A', light:'#F1EFE8'},
+};
+
+const ENTITIES = {
+  College:        { group:'org',      x:30,   y:30,  fields:[{n:'id',t:'uuid',k:'PK'},{n:'name',t:'string'},{n:'address',t:'string?'},{n:'createdAt',t:'DateTime'},{n:'updatedAt',t:'DateTime'}]},
+  Branch:         { group:'org',      x:280,  y:30,  fields:[{n:'id',t:'uuid',k:'PK'},{n:'name',t:'string'},{n:'collegeId',t:'uuid',k:'FK'},{n:'createdAt',t:'DateTime'},{n:'updatedAt',t:'DateTime'}]},
+  Batch:          { group:'org',      x:530,  y:30,  fields:[{n:'id',t:'uuid',k:'PK'},{n:'name',t:'string'},{n:'graduationYear',t:'int'},{n:'branchId',t:'uuid',k:'FK'},{n:'createdAt',t:'DateTime'},{n:'updatedAt',t:'DateTime'}]},
+  User:           { group:'org',      x:780,  y:30,  fields:[{n:'id',t:'uuid',k:'PK'},{n:'email',t:'string'},{n:'passwordHash',t:'string'},{n:'name',t:'string'},{n:'role',t:'Role'},{n:'collegeId',t:'uuid',k:'FK'},{n:'branchId',t:'uuid',k:'FK'},{n:'batchId',t:'uuid',k:'FK'},{n:'createdAt',t:'DateTime'},{n:'updatedAt',t:'DateTime'}]},
+  UserBranchAccess:{ group:'org',     x:1060, y:30,  fields:[{n:'userId',t:'uuid',k:'PK/FK'},{n:'branchId',t:'uuid',k:'PK/FK'},{n:'assignedAt',t:'DateTime'}]},
+  Subject:        { group:'academic', x:30,   y:310, fields:[{n:'id',t:'uuid',k:'PK'},{n:'name',t:'string'},{n:'credits',t:'int'},{n:'collegeId',t:'uuid',k:'FK'},{n:'createdAt',t:'DateTime'}]},
+  Enrollment:     { group:'academic', x:150,  y:170, fields:[{n:'id',t:'uuid',k:'PK'},{n:'studentId',t:'uuid',k:'FK'},{n:'subjectId',t:'uuid',k:'FK'},{n:'semester',t:'int?'},{n:'enrolledAt',t:'DateTime'}]},
+  QuestionOption: { group:'academic', x:280,  y:310, fields:[{n:'id',t:'uuid',k:'PK'},{n:'questionId',t:'uuid',k:'FK'},{n:'label',t:'string'},{n:'text',t:'string'},{n:'isCorrect',t:'bool'},{n:'order',t:'int'}]},
+  Question:       { group:'academic', x:540,  y:310, fields:[{n:'id',t:'uuid',k:'PK'},{n:'subjectId',t:'uuid',k:'FK'},{n:'collegeId',t:'uuid',k:'FK'},{n:'creatorId',t:'uuid',k:'FK'},{n:'text',t:'string'},{n:'type',t:'QuestionType'},{n:'modelAnswer',t:'string?'},{n:'defaultMarks',t:'int'},{n:'createdAt',t:'DateTime'},{n:'updatedAt',t:'DateTime'}]},
+  Exam:           { group:'exam',     x:820,  y:310, fields:[{n:'id',t:'uuid',k:'PK'},{n:'title',t:'string'},{n:'semester',t:'int?'},{n:'startTime',t:'DateTime?'},{n:'endTime',t:'DateTime?'},{n:'duration',t:'int'},{n:'totalMarks',t:'int'},{n:'status',t:'ExamStatus'},{n:'shuffleQuestions',t:'bool'},{n:'maxAttempts',t:'int'},{n:'collegeId',t:'uuid',k:'FK'},{n:'subjectId',t:'uuid',k:'FK'},{n:'creatorId',t:'uuid',k:'FK'},{n:'createdAt',t:'DateTime'},{n:'updatedAt',t:'DateTime'}]},
+  ExamAccess:     { group:'exam',     x:1090, y:310, fields:[{n:'id',t:'uuid',k:'PK'},{n:'examId',t:'uuid',k:'FK'},{n:'batchId',t:'uuid?',k:'FK'},{n:'branchId',t:'uuid?',k:'FK'}]},
+  ExamQuestion:   { group:'exam',     x:30,   y:610, fields:[{n:'examId',t:'uuid',k:'PK/FK'},{n:'questionId',t:'uuid',k:'PK/FK'},{n:'order',t:'int'},{n:'marks',t:'int'},{n:'questionTextSnapshot',t:'string'},{n:'optionsSnapshot',t:'json?'},{n:'correctAnswersSnapshot',t:'string[]'}]},
+  Attempt:        { group:'attempt',  x:310,  y:610, fields:[{n:'id',t:'uuid',k:'PK'},{n:'userId',t:'uuid',k:'FK'},{n:'examId',t:'uuid',k:'FK'},{n:'status',t:'AttemptStatus'},{n:'startedAt',t:'DateTime'},{n:'expiresAt',t:'DateTime'},{n:'submittedAt',t:'DateTime?'},{n:'ipAddress',t:'string?'},{n:'flagCount',t:'int'}]},
+  Answer:         { group:'attempt',  x:590,  y:610, fields:[{n:'id',t:'uuid',k:'PK'},{n:'attemptId',t:'uuid',k:'FK'},{n:'questionId',t:'uuid',k:'FK'},{n:'selectedOptions',t:'string[]'},{n:'subjectiveText',t:'string?'},{n:'clientSavedAt',t:'DateTime?'},{n:'serverSavedAt',t:'DateTime?'},{n:'syncStatus',t:'SyncStatus'},{n:'syncRetryCount',t:'int'},{n:'finalSubmitReconciled',t:'bool'},{n:'isCorrect',t:'bool?'},{n:'marksObtained',t:'float?'}]},
+  AnswerHistory:  { group:'proctor',  x:880,  y:610, fields:[{n:'id',t:'uuid',k:'PK'},{n:'answerId',t:'uuid',k:'FK'},{n:'selectedOptions',t:'string[]'},{n:'clientSavedAt',t:'DateTime'},{n:'serverReceivedAt',t:'DateTime'},{n:'wasRejected',t:'bool'},{n:'rejectionReason',t:'string?'},{n:'source',t:'string'}]},
+  ProctorLog:     { group:'proctor',  x:1150, y:610, fields:[{n:'id',t:'uuid',k:'PK'},{n:'attemptId',t:'uuid',k:'FK'},{n:'event',t:'string'},{n:'metadata',t:'json?'},{n:'createdAt',t:'DateTime'}]},
+  Result:         { group:'result',   x:590,  y:890, fields:[{n:'id',t:'uuid',k:'PK'},{n:'attemptId',t:'uuid',k:'FK'},{n:'studentId',t:'uuid',k:'FK'},{n:'examId',t:'uuid',k:'FK'},{n:'totalMarksObtained',t:'float'},{n:'percentage',t:'float?'},{n:'isPassed',t:'bool?'},{n:'gradePoint',t:'float?'},{n:'gradingStatus',t:'GradingStatus'},{n:'overallFeedback',t:'string?'},{n:'publishedAt',t:'DateTime?'},{n:'createdAt',t:'DateTime'},{n:'updatedAt',t:'DateTime'}]},
+};
+
+const RELATIONS = [
+  ['College','Branch','1:N'],['Branch','Batch','1:N'],['Batch','User','1:N'],
+  ['College','User','1:N'],['Branch','User','1:N'],
+  ['User','UserBranchAccess','1:N'],['Branch','UserBranchAccess','1:N'],
+  ['College','Subject','1:N'],['Subject','Question','1:N'],
+  ['User','Enrollment','1:N'],['Subject','Enrollment','1:N'],
+  ['Question','QuestionOption','1:N'],
+  ['College','Question','1:N'],['User','Question','1:N'],
+  ['College','Exam','1:N'],['Subject','Exam','1:N'],['User','Exam','1:N'],
+  ['Exam','ExamAccess','1:N'],['Batch','ExamAccess','1:N'],['Branch','ExamAccess','1:N'],
+  ['Exam','ExamQuestion','1:N'],['Question','ExamQuestion','1:N'],
+  ['User','Attempt','1:N'],['Exam','Attempt','1:N'],
+  ['Attempt','Answer','1:N'],['Question','Answer','1:N'],
+  ['Answer','AnswerHistory','1:N'],
+  ['Attempt','ProctorLog','1:N'],
+  ['Attempt','Result','1:1'],['User','Result','1:N'],['Exam','Result','1:N'],
+];
+
+const W = 200, ROW = 18, PAD = 10, HEAD = 28;
+function entityHeight(e){ return HEAD + e.fields.length * ROW + PAD; }
+
+const canvas = document.getElementById('erd');
+const ctx = canvas.getContext('2d');
+const dpr = window.devicePixelRatio || 1;
+canvas.width  = 1400 * dpr; canvas.height = 1050 * dpr;
+canvas.style.width = '1400px'; canvas.style.height = '1050px';
+ctx.scale(dpr, dpr);
+
+let selected = null;
+let hoveredEntity = null;
+const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+
+const C = {
+  bg:     dark ? '#2C2C2A' : '#F1EFE8',
+  card:   dark ? '#3d3d3a' : '#FFFFFF',
+  border: dark ? '#5F5E5A' : '#D3D1C7',
+  text:   dark ? '#c2c0b6' : '#2C2C2A',
+  sub:    dark ? '#888780' : '#5F5E5A',
+  pk:     dark ? '#FAC775' : '#854F0B',
+  fk:     dark ? '#9FE1CB' : '#0F6E56',
+  pkfk:   dark ? '#F5C4B3' : '#712B13',
+  line:   dark ? '#5F5E5A' : '#B4B2A9',
+  hover:  dark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
+  sel:    dark ? 'rgba(175,169,236,0.18)' : 'rgba(83,74,183,0.10)',
+};
+
+function entityCenter(name){
+  const e = ENTITIES[name];
+  return {x: e.x + W/2, y: e.y + HEAD/2};
+}
+
+function entityEdge(from, to){
+  const fe = ENTITIES[from], te = ENTITIES[to];
+  const fc = {x: fe.x+W/2, y: fe.y + entityHeight(fe)/2};
+  const tc = {x: te.x+W/2, y: te.y + entityHeight(te)/2};
+  const dx = tc.x - fc.x, dy = tc.y - fc.y;
+  let sx, sy, ex, ey;
+  if(Math.abs(dx) > Math.abs(dy)){
+    sx = dx > 0 ? fe.x+W : fe.x; sy = fc.y;
+    ex = dx > 0 ? te.x : te.x+W; ey = tc.y;
+  } else {
+    sx = fc.x; sy = dy > 0 ? fe.y+entityHeight(fe) : fe.y;
+    ex = tc.x; ey = dy > 0 ? te.y : te.y+entityHeight(te);
+  }
+  return {sx,sy,ex,ey};
+}
+
+function drawArrow(sx,sy,ex,ey,color){
+  ctx.save();
+  ctx.strokeStyle = color; ctx.fillStyle = color;
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  const mx = (sx+ex)/2, my = (sy+ey)/2;
+  ctx.moveTo(sx,sy);
+  if(Math.abs(ex-sx) > 10 && Math.abs(ey-sy) > 10){
+    ctx.lineTo(mx, sy);
+    ctx.lineTo(mx, ey);
+  }
+  ctx.lineTo(ex,ey);
+  ctx.stroke();
+  const angle = Math.atan2(ey - (Math.abs(ey-sy)>10 ? ey : sy), ex - mx);
+  const len = 6;
+  ctx.beginPath();
+  ctx.moveTo(ex,ey);
+  ctx.lineTo(ex - len*Math.cos(angle-0.4), ey - len*Math.sin(angle-0.4));
+  ctx.lineTo(ex - len*Math.cos(angle+0.4), ey - len*Math.sin(angle+0.4));
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+}
+
+function drawEntity(name, highlight){
+  const e = ENTITIES[name];
+  const g = GROUPS[e.group];
+  const h = entityHeight(e);
+  const isSelected = selected === name;
+  const isHovered  = hoveredEntity === name;
+
+  ctx.save();
+  ctx.shadowColor = 'transparent';
+
+  ctx.fillStyle = isSelected ? C.sel : (isHovered ? C.hover : C.card);
+  ctx.strokeStyle = isSelected ? g.color : (highlight ? g.color : C.border);
+  ctx.lineWidth = isSelected ? 2 : (highlight ? 1.5 : 0.8);
+  ctx.beginPath();
+  ctx.roundRect(e.x, e.y, W, h, 8);
+  ctx.fill(); ctx.stroke();
+
+  ctx.fillStyle = g.color;
+  ctx.beginPath();
+  ctx.roundRect(e.x, e.y, W, HEAD, [8,8,0,0]);
+  ctx.fill();
+
+  ctx.fillStyle = '#fff';
+  ctx.font = '500 12px ' + (getComputedStyle(document.body).fontFamily || 'sans-serif');
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(name, e.x + W/2, e.y + HEAD/2);
+
+  e.fields.forEach((f, i) => {
+    const fy = e.y + HEAD + i * ROW + ROW/2;
+    const kColor = f.k === 'PK' ? C.pk : f.k === 'FK' ? C.fk : f.k === 'PK/FK' ? C.pkfk : null;
+    if(kColor){
+      ctx.fillStyle = kColor;
+      ctx.font = '500 9px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(f.k, e.x + 6, fy);
+    }
+    ctx.fillStyle = C.text;
+    ctx.font = '400 11px sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(f.n, e.x + (f.k ? 42 : 8), fy);
+    ctx.fillStyle = C.sub;
+    ctx.font = '400 10px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(f.t, e.x + W - 5, fy);
+  });
+  ctx.restore();
+}
+
+function getRelatedEntities(name){
+  const s = new Set();
+  RELATIONS.forEach(([a,b])=>{ if(a===name) s.add(b); if(b===name) s.add(a); });
+  return s;
+}
+
+function draw(){
+  ctx.clearRect(0,0,1400,1050);
+  ctx.fillStyle = dark ? '#2C2C2A' : '#F8F7F4';
+  ctx.fillRect(0,0,1400,1050);
+
+  const related = selected ? getRelatedEntities(selected) : new Set();
+
+  RELATIONS.forEach(([a,b,card])=>{
+    const isRel = selected && (a===selected||b===selected);
+    const e = entityEdge(a,b);
+    const col = isRel ? GROUPS[ENTITIES[a].group].color : C.line;
+    ctx.globalAlpha = (!selected || isRel) ? 1 : 0.15;
+    drawArrow(e.sx,e.sy,e.ex,e.ey,col);
+    ctx.globalAlpha = 1;
+  });
+
+  Object.keys(ENTITIES).forEach(name=>{
+    const isRelated = related.has(name);
+    ctx.globalAlpha = (!selected || selected===name || isRelated) ? 1 : 0.25;
+    drawEntity(name, isRelated);
+    ctx.globalAlpha = 1;
+  });
+}
+
+function hitTest(mx,my){
+  return Object.keys(ENTITIES).find(name=>{
+    const e = ENTITIES[name];
+    const h = entityHeight(e);
+    return mx>=e.x && mx<=e.x+W && my>=e.y && my<=e.y+h;
+  }) || null;
+}
+
+const rect = ()=>canvas.getBoundingClientRect();
+canvas.addEventListener('mousemove', ev=>{
+  const r = rect();
+  const mx = (ev.clientX - r.left) * (1400/r.width);
+  const my = (ev.clientY - r.top)  * (1050/r.height);
+  const hit = hitTest(mx,my);
+  if(hit !== hoveredEntity){ hoveredEntity = hit; canvas.style.cursor = hit?'pointer':'default'; draw(); }
+});
+
+canvas.addEventListener('click', ev=>{
+  const r = rect();
+  const mx = (ev.clientX - r.left) * (1400/r.width);
+  const my = (ev.clientY - r.top)  * (1050/r.height);
+  const hit = hitTest(mx,my);
+  selected = (hit === selected) ? null : hit;
+  draw();
+  renderDetail(selected);
+});
+
+function renderDetail(name){
+  const dp = document.getElementById('dp');
+  if(!name){
+    dp.innerHTML = '<div class="dp-header"><span class="dp-title">Click any entity to inspect its fields and relations</span></div><div class="dp-body"><p class="dp-empty">No entity selected</p></div>';
+    return;
+  }
+  const e = ENTITIES[name];
+  const g = GROUPS[e.group];
+  const rels = RELATIONS.filter(([a,b])=>a===name||b===name);
+  const fieldsHtml = e.fields.map(f=>{
+    const kTag = f.k ? `<div class="dp-field-note">${f.k}</div>` : '';
+    return `<div class="dp-field"><div class="dp-field-name">${f.n}</div><div class="dp-field-type">${f.t}</div>${kTag}</div>`;
+  }).join('');
+  const relHtml = rels.map(([a,b,card])=>{
+    const other = a===name?b:a;
+    const dir = a===name ? '→' : '←';
+    return `<div class="dp-rel" onclick="jumpTo('${other}')">${dir} <b>${other}</b> <span style="color:var(--color-text-tertiary)">${card||''}</span></div>`;
+  }).join('');
+  dp.innerHTML = `
+    <div class="dp-header">
+      <span class="dp-title">${name}</span>
+      <span class="dp-badge" style="background:${g.light};color:${g.color}">${g.label}</span>
+    </div>
+    <div class="dp-body">
+      <div class="dp-grid">${fieldsHtml}</div>
+      ${rels.length ? `<div class="dp-rels"><div class="dp-rel-title">Relations (${rels.length}) — click to jump</div>${relHtml}</div>` : ''}
+    </div>`;
+}
+
+window.jumpTo = function(name){
+  selected = name; draw(); renderDetail(name);
+  const e = ENTITIES[name];
+  const r = canvas.getBoundingClientRect();
+  const scaleX = r.width / 1400;
+  const scrollX = (e.x + W/2) * scaleX - window.innerWidth/2;
+  const wrap = canvas.parentElement;
+  wrap.scrollLeft = Math.max(0, (e.x - 50) * scaleX);
+};
+
+const groups = ['all',...Object.keys(GROUPS)];
+const tb = document.getElementById('toolbar');
+groups.forEach(g=>{
+  const btn = document.createElement('button');
+  btn.className = 'filter-btn' + (g==='all'?' active':'');
+  btn.textContent = g==='all' ? 'All entities' : GROUPS[g].label;
+  btn.onclick = ()=>{
+    document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    if(g==='all'){ selected=null; draw(); renderDetail(null); return; }
+    const names = Object.keys(ENTITIES).filter(n=>ENTITIES[n].group===g);
+    selected = null;
+    Object.keys(ENTITIES).forEach(n=>{
+      const entity = ENTITIES[n];
+      const orig = {x: entity._ox ?? entity.x, y: entity._oy ?? entity.y};
+    });
+    draw();
+    renderDetail(null);
+  };
+  tb.appendChild(btn);
+});
+
+draw();
+</script>
