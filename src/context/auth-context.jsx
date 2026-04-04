@@ -137,13 +137,10 @@ export function AuthProvider({ children }) {
 
   }, []);
 
-  async function login(userData) {
+  function login(userData) {
 
     // set immediately for instant UI update
     setUser(userData);
-
-    // optional: reload from server for accuracy
-    await loadUser();
 
   }
 

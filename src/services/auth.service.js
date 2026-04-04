@@ -31,5 +31,7 @@ export async function registerService(data) {
     body: JSON.stringify(data),
   });
 
+  setToken(res.token);
+
   return res.user;
 }

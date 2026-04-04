@@ -22,8 +22,23 @@ export async function registerUser({ email, password, role }) {
     },
   });
 
+  const token = jwt.sign(
+    {
+      userId: user.id,
+      email: user.email,
+      role: user.role,
+    },
+    process.env.JWT_SECRET,
+    {
+      expiresIn: "7d",
+    }
+  );
+
   const { password: _, ...safeUser } = user;
-return safeUser;
+  return {
+    token,
+    user: safeUser,
+  };
 }
 
 export async function loginUser({ email, password }) {

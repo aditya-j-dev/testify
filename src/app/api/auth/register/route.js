@@ -6,11 +6,12 @@ export async function POST(req) {
 
     const body = await req.json();
 
-    const user = await registerUser(body);
+    const result = await registerUser(body);
 
     return Response.json({
       success: true,
-      user,
+      user: result.user,
+      token: result.token,
     });
 
   } catch (error) {
