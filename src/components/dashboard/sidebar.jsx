@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useAuth } from "@/context/auth-context";
-import { Users, GraduationCap, GitBranch, LayoutDashboard } from "lucide-react";
+import { Users, GraduationCap, GitBranch, LayoutDashboard, BookOpen } from "lucide-react";
 
 export default function Sidebar() {
 
@@ -56,6 +56,12 @@ export default function Sidebar() {
               <GraduationCap className="w-4 h-4 mr-2" /> Manage Students
             </Link>
             
+            <Link
+              href="/dashboard/admin/subjects"
+              className="flex items-center px-3 py-2 text-sm rounded-md hover:bg-accent text-foreground mb-1"
+            >
+              <BookOpen className="w-4 h-4 mr-2 text-indigo-500" /> Manage Subjects
+            </Link>
             <Link
               href="/dashboard/admin/branches"
               className="flex items-center px-3 py-2 text-sm rounded-md hover:bg-accent text-foreground mb-1"

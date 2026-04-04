@@ -154,3 +154,39 @@ export async function getBatchesByBranch(branchId) {
     where: { branchId },
   });
 }
+
+// --- Subject ---
+export async function createSubject({ name, collegeId, credits }) {
+  if (!name || !collegeId) throw new Error("Name and collegeId are required");
+  
+  return prisma.subject.create({
+    data: {
+      name,
+      collegeId,
+      credits: credits ? parseInt(credits, 10) : 3,
+    }
+  });
+}
+
+export async function getSubjectsByCollege(collegeId) {
+  return prisma.subject.findMany({
+    where: { collegeId },
+    orderBy: { name: 'asc' }
+  });
+}
+
+export async function updateSubject(id, { name, credits }) {
+  return prisma.subject.update({
+    where: { id },
+    data: { 
+      name,
+      credits: credits ? parseInt(credits, 10) : undefined,
+    }
+  });
+}
+
+export async function deleteSubject(id) {
+  return prisma.subject.delete({
+    where: { id }
+  });
+}

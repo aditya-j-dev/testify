@@ -59,6 +59,16 @@ export async function addQuestionToExam(teacherId, examId, questionId, order, ma
   });
 }
 
+export async function removeQuestionFromExam(teacherId, examId, questionId) {
+  const exam = await prisma.exam.findUnique({ where: { id: examId } });
+  if (!exam || exam.creatorId !== teacherId) throw new Error("Forbidden");
+  if (exam.status !== "DRAFT") throw new Error("Cannot modify questions of a published exam");
+
+  return prisma.examQuestion.delete({
+    where: { examId_questionId: { examId, questionId } }
+  });
+}
+
 export async function publishExam(teacherId, examId, timestamps) {
   const { startTime, endTime } = timestamps;
   
@@ -123,4 +133,52 @@ export async function getExamsByCreator(teacherId) {
     },
     orderBy: { createdAt: "desc" }
   });
+}
+
+export async function getExamById(id, teacherId) {
+  const exam = await prisma.exam.findUnique({
+    where: { id },
+    include: {
+      subject: true,
+      questions: {
+        orderBy: { order: 'asc' },
+        include: { question: { include: { options: true } } }
+      },
+      access: {
+         include: { branch: true, batch: true }
+      }
+    }
+  });
+
+  if (exam && exam.creatorId !== teacherId) throw new Error("Unauthorized");
+  return exam;
+}
+
+export async function updateExam(id, teacherId, data) {
+  const exam = await prisma.exam.findUnique({ where: { id } });
+  if (!exam || exam.creatorId !== teacherId) throw new Error("Unauthorized");
+  if (exam.status !== "DRAFT") throw new Error("Only DRAFT exams can be modified");
+
+  const { title, description, semester, duration, totalMarks, passingMarks, subjectId } = data;
+
+  return prisma.exam.update({
+    where: { id },
+    data: {
+      title,
+      description,
+      semester: semester ? parseInt(semester, 10) : undefined,
+      duration: duration ? parseInt(duration, 10) : undefined,
+      totalMarks: totalMarks ? parseInt(totalMarks, 10) : undefined,
+      passingMarks: passingMarks ? parseInt(passingMarks, 10) : undefined,
+      subjectId
+    }
+  });
+}
+
+export async function deleteExam(id, teacherId) {
+  const exam = await prisma.exam.findUnique({ where: { id } });
+  if (!exam || exam.creatorId !== teacherId) throw new Error("Unauthorized");
+  if (exam.status !== "DRAFT") throw new Error("Only DRAFT exams can be deleted");
+
+  return prisma.exam.delete({ where: { id } });
 }

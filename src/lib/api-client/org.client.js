@@ -88,5 +88,115 @@ export const orgClient = {
       });
       return res.json();
     }
+  },
+
+  // --- Subjects ---
+  subjects: {
+    async list(collegeId) {
+      const res = await fetch(`/api/org/subjects?collegeId=${collegeId}`);
+      return res.json();
+    },
+    async create(data) {
+      const res = await fetch("/api/org/subjects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    async update(id, data) {
+      const res = await fetch(`/api/org/subjects/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    async delete(id) {
+       const res = await fetch(`/api/org/subjects/${id}`, { method: "DELETE" });
+       return res.json();
+    }
+  },
+
+  // --- Questions (Bank) ---
+  questions: {
+    async list(filters = {}) {
+      const params = new URLSearchParams(filters);
+      const res = await fetch(`/api/org/questions?${params}`);
+      return res.json();
+    },
+    async create(data) {
+      const res = await fetch("/api/org/questions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    async delete(id) {
+       const res = await fetch(`/api/org/questions/${id}`, { method: "DELETE" });
+       return res.json();
+    },
+    async update(id, data) {
+       const res = await fetch(`/api/org/questions/${id}`, {
+         method: "PATCH",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify(data),
+       });
+       return res.json();
+    }
+  },
+
+  // --- Exams (Engine) ---
+  exams: {
+    async list(filters = {}) {
+      const params = new URLSearchParams(filters);
+      const res = await fetch(`/api/org/exams?${params}`);
+      return res.json();
+    },
+    async create(data) {
+      const res = await fetch("/api/org/exams", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    async getById(id) {
+       const res = await fetch(`/api/org/exams/${id}`);
+       return res.json();
+    },
+    async update(id, data) {
+       const res = await fetch(`/api/org/exams/${id}`, {
+         method: "PATCH",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify(data),
+       });
+       return res.json();
+    },
+    async delete(id) {
+       const res = await fetch(`/api/org/exams/${id}`, { method: "DELETE" });
+       return res.json();
+    },
+    async addQuestion(id, data) {
+       const res = await fetch(`/api/org/exams/${id}/questions`, {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify(data),
+       });
+       return res.json();
+    },
+    async removeQuestion(id, questionId) {
+       const res = await fetch(`/api/org/exams/${id}/questions?questionId=${questionId}`, { method: "DELETE" });
+       return res.json();
+    },
+    async publish(id, data) {
+       const res = await fetch(`/api/org/exams/${id}/publish`, {
+         method: "POST",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify(data),
+       });
+       return res.json();
+    }
   }
 };
