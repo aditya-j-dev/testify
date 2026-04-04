@@ -41,8 +41,11 @@ export const orgClient = {
 
   // --- Users (Faculty/Students) ---
   users: {
-    async list(role = "TEACHER") {
-      const res = await fetch(`/api/org/users?role=${role}`);
+    async list(role = "TEACHER", batchId = null) {
+      const url = batchId 
+        ? `/api/org/users?role=${role}&batchId=${batchId}`
+        : `/api/org/users?role=${role}`;
+      const res = await fetch(url);
       return res.json();
     },
     async create(userData) {

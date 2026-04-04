@@ -1,4 +1,4 @@
-import { createUserForCollege, getUsersByCollege } from "@/lib/services/org.service";
+import { createUserForCollege, getUsersByCollege, getUsersByBatch } from "@/lib/services/org.service";
 import { cookies } from "next/headers";
 
 async function getAuthContext() {
@@ -20,13 +20,20 @@ export async function GET(req) {
 
     const { searchParams } = new URL(req.url);
     const role = searchParams.get("role") || "TEACHER";
+    const batchId = searchParams.get("batchId");
     
     // Admins can only see users for their own college. Super Admins might pass collegeId in query.
     const collegeId = auth.role === "SUPER_ADMIN" ? searchParams.get("collegeId") : auth.collegeId;
 
     if (!collegeId) return Response.json({ success: false, message: "No college context found" }, { status: 400 });
 
-    const users = await getUsersByCollege(collegeId, role);
+    let users;
+    if (batchId && role === "STUDENT") {
+      users = await getUsersByBatch(batchId);
+    } else {
+      users = await getUsersByCollege(collegeId, role);
+    }
+    
     return Response.json({ success: true, users });
   } catch (error) {
     return Response.json({ success: false, message: error.message }, { status: 500 });
@@ -43,10 +50,11 @@ export async function POST(req) {
     const body = await req.json();
     const collegeId = auth.role === "SUPER_ADMIN" ? body.collegeId : auth.collegeId;
     const role = body.role || "TEACHER";
+    const batchId = body.batchId;
 
     if (!collegeId) return Response.json({ success: false, message: "Missing college context" }, { status: 400 });
 
-    const user = await createUserForCollege(collegeId, { ...body, role });
+    const user = await createUserForCollege(collegeId, { ...body, role, batchId });
     const { passwordHash: _, ...safeUser } = user;
     
     return Response.json({ success: true, user: safeUser }, { status: 201 });

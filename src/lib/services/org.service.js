@@ -47,12 +47,19 @@ export async function updateCollege(id, { name, address }) {
 export async function getUsersByCollege(collegeId, role) {
   return prisma.user.findMany({
     where: { collegeId, role },
+    select: { id: true, name: true, email: true, createdAt: true, batchId: true, branchId: true }
+  });
+}
+
+export async function getUsersByBatch(batchId) {
+  return prisma.user.findMany({
+    where: { batchId, role: "STUDENT" },
     select: { id: true, name: true, email: true, createdAt: true }
   });
 }
 
 import bcrypt from "bcrypt";
-export async function createUserForCollege(collegeId, { name, email, password, role }) {
+export async function createUserForCollege(collegeId, { name, email, password, role, batchId, branchId }) {
   if (!name || !email || !password || !role) throw new Error("Missing required user data");
   
   const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -66,7 +73,9 @@ export async function createUserForCollege(collegeId, { name, email, password, r
       email,
       passwordHash: hashedPassword,
       role: role.toUpperCase(),
-      collegeId
+      collegeId,
+      batchId,
+      branchId
     }
   });
 }

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useAuth } from "@/context/auth-context";
-import { Users } from "lucide-react";
+import { Users, GraduationCap, GitBranch, LayoutDashboard } from "lucide-react";
 
 export default function Sidebar() {
 
@@ -23,7 +23,7 @@ export default function Sidebar() {
       <nav className="space-y-1">
         <Link
           href="/dashboard"
-          className="flex items-center px-3 py-2 text-sm font-medium rounded-md hover:bg-accent text-foreground transition-all"
+          className="flex items-center px-8 py-2 text-lg font-medium rounded-md hover:bg-accent text-foreground transition-all"
         >
           Testify
         </Link>
@@ -50,16 +50,23 @@ export default function Sidebar() {
               <Users className="w-4 h-4 mr-2" /> Manage Teachers
             </Link>
             <Link
-              href="/dashboard/admin/branches"
-              className="flex items-center px-3 py-2 text-sm rounded-md hover:bg-accent text-foreground"
+              href="/dashboard/admin/students"
+              className="flex items-center px-3 py-2 text-sm font-semibold rounded-md hover:bg-emerald-50 text-emerald-700 transition-all mb-4"
             >
-              Academic Branches
+              <GraduationCap className="w-4 h-4 mr-2" /> Manage Students
+            </Link>
+            
+            <Link
+              href="/dashboard/admin/branches"
+              className="flex items-center px-3 py-2 text-sm rounded-md hover:bg-accent text-foreground mb-1"
+            >
+              <GitBranch className="w-4 h-4 mr-2" /> Academic Branches
             </Link>
             <Link
               href="/dashboard/admin/batches"
               className="flex items-center px-3 py-2 text-sm rounded-md hover:bg-accent text-foreground"
             >
-              Class Batches
+              <LayoutDashboard className="w-4 h-4 mr-2" /> Class Batches
             </Link>
           </div>
         )}
