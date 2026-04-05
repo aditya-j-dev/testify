@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useAuth } from "@/context/auth-context";
-import { Users, GraduationCap, GitBranch, LayoutDashboard, BookOpen } from "lucide-react";
+import { Users, GraduationCap, GitBranch, LayoutDashboard, BookOpen, ClipboardList } from "lucide-react";
 
 export default function Sidebar() {
 
@@ -77,19 +77,21 @@ export default function Sidebar() {
           </div>
         )}
 
-        {(user?.role === "TEACHER" || user?.role === "ADMIN" || user?.role === "SUPER_ADMIN") && (
-          <div className="pt-4">
-            <h3 className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">Academic Control</h3>
+        {(user?.role === "TEACHER" || user?.role === "ADMIN") && (
+          <div className="pt-4 space-y-1">
+            <h3 className="px-3 text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 opacity-50">Faculty Control</h3>
             <Link
-              href="/dashboard/exams"
-              className="flex items-center px-3 py-2 text-sm rounded-md hover:bg-accent text-foreground"
+              href="/dashboard/teacher/exams"
+              className="flex items-center px-4 py-2.5 text-sm font-bold rounded-xl hover:bg-indigo-50 hover:text-indigo-700 transition-all group"
             >
-              My Exams
+              <ClipboardList className="w-4 h-4 mr-2.5 text-indigo-400 group-hover:text-indigo-600 transition-colors" /> 
+              Manage Exams
             </Link>
             <Link
               href="/dashboard/teacher/questions"
-              className="flex items-center px-3 py-2 text-sm rounded-md hover:bg-accent text-foreground"
+              className="flex items-center px-4 py-2.5 text-sm font-bold rounded-xl hover:bg-slate-50 hover:text-slate-900 transition-all group"
             >
+              <BookOpen className="w-4 h-4 mr-2.5 text-slate-400 group-hover:text-slate-600 transition-colors" /> 
               Question Bank
             </Link>
           </div>

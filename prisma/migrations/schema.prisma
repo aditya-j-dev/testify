@@ -323,11 +323,11 @@ model Attempt {
 // ------------------------------------------------------
 
 model Answer {
-  id         String @id @default(uuid())
-  attemptId  String
-  questionId String
+  id              String   @id @default(uuid())
+  attemptId       String
+  questionId      String
 
-  // Current committed state — what the server last accepted
+  // Current committed state
   selectedOptions String[]
   subjectiveText  String?
 
@@ -336,53 +336,25 @@ model Answer {
   marksObtained   Float?
   teacherFeedback String?
   gradedById      String?
+  
+  // Heartbeat / Auto-save sync fields
+  clientSavedAt   DateTime? // Time recorded by browser during interaction
+  serverSavedAt   DateTime? // Time recorded by server during sync
+  syncStatus      SyncStatus @default(SYNCED)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
-  // --------------------------------------------------
-  // AUTO-SAVE SYNC FIELDS
-  // --------------------------------------------------
-
-  // Timestamp the CLIENT recorded at the moment of interaction (click / keystroke).
-  // Used for conflict resolution: if clientSavedAt > serverSavedAt, the client
-  // has newer data and must push it during final submit.
-  //
-  // Anti-cheat rule (enforced server-side on every save and final submit):
-  //   REJECT if clientSavedAt < attempt.startedAt
-  //   REJECT if clientSavedAt > attempt.expiresAt
-  //   Flag the attempt if difference from serverReceivedAt exceeds threshold (e.g. 30s)
-  clientSavedAt DateTime?
-
-  // Wall-clock time of the last successful server write for this answer.
-  // Compare against clientSavedAt to detect failed background syncs.
-  serverSavedAt DateTime?
-
-  // Current sync state:
-  //   PENDING  — client saved locally; background request in-flight or queued
-  //   SYNCED   — server confirmed write (serverSavedAt is up-to-date)
-  //   CONFLICT — server rejected because clientSavedAt was outside exam window
-  //   FAILED   — transient server/network error; client will retry with backoff
-  syncStatus SyncStatus @default(PENDING)
-
-  // How many background sync retries have been made.
-  // If this exceeds a threshold (e.g. 5), flag the attempt for manual review.
-  syncRetryCount Int @default(0)
-
-  // Set true by the final-submit endpoint after it reconciles this answer.
-  // The final submit pushes any answer where clientSavedAt > serverSavedAt,
-  // then locks the attempt. This confirms reconciliation occurred.
-  finalSubmitReconciled Boolean @default(false)
-
-  savedAt   DateTime @default(now()) // row creation time
-  updatedAt DateTime @updatedAt      // last server-side update
-
-  attempt  Attempt        @relation(fields: [attemptId], references: [id], onDelete: Cascade)
-  question Question       @relation(fields: [questionId], references: [id], onDelete: Cascade)
-  gradedBy User?          @relation("AnswerGrader", fields: [gradedById], references: [id])
+  attempt  Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  gradedBy User?    @relation("AnswerGrader", fields: [gradedById], references: [id])
   history  AnswerHistory[]
 
   @@unique([attemptId, questionId])
   @@index([attemptId])
-  @@index([syncStatus]) // lets server quickly find PENDING/FAILED rows
+  @@index([syncStatus])
 }
+
 
 // Append-only audit log — one row per background sync or reconcile event.
 // Used for: timeline reconstruction, dispute resolution, proctoring audit.

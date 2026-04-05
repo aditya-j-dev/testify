@@ -109,6 +109,39 @@ export async function publishExam(teacherId, examId, timestamps) {
   });
 }
 
+/**
+ * Synchronizes snapshots for all exams that are currently in PUBLISHED status
+ * when their source question is updated. 
+ * This allows "hot-fixes" for typos/clarifications before students start.
+ */
+export async function syncExamSnapshots(questionId) {
+  const linkedExamQuestions = await prisma.examQuestion.findMany({
+    where: { 
+      questionId,
+      exam: { status: 'PUBLISHED' } 
+    },
+    include: { question: { include: { options: true } } }
+  });
+
+  if (linkedExamQuestions.length === 0) return;
+
+  await prisma.$transaction(
+    linkedExamQuestions.map((eq) => {
+      const liveQuestion = eq.question;
+      const liveCorrect = liveQuestion.options.filter(o => o.isCorrect).map(o => o.label);
+
+      return prisma.examQuestion.update({
+        where: { examId_questionId: { examId: eq.examId, questionId: eq.questionId } },
+        data: {
+          questionTextSnapshot: liveQuestion.text,
+          optionsSnapshot: JSON.stringify(liveQuestion.options),
+          correctAnswersSnapshot: liveCorrect
+        }
+      });
+    })
+  );
+}
+
 // --- Access Management ---
 export async function grantExamAccess(teacherId, examId, targetId, isBatch = true) {
   const exam = await prisma.exam.findUnique({ where: { id: examId } });
@@ -152,6 +185,17 @@ export async function getExamById(id, teacherId) {
 
   if (exam && exam.creatorId !== teacherId) throw new Error("Unauthorized");
   return exam;
+}
+
+export async function startExam(teacherId, examId) {
+  const exam = await prisma.exam.findUnique({ where: { id: examId } });
+  if (!exam || exam.creatorId !== teacherId) throw new Error("Unauthorized");
+  if (exam.status !== "PUBLISHED") throw new Error("Only published exams can be started");
+
+  return prisma.exam.update({
+    where: { id: examId },
+    data: { status: "ACTIVE" }
+  });
 }
 
 export async function updateExam(id, teacherId, data) {
