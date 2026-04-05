@@ -24,10 +24,12 @@ import {
   ArrowRight,
   Settings2,
   Save,
-  Zap
+  Zap,
+  Trash
 } from "lucide-react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 // --- Sub-Component: Question Composer Modal ---
 function QuestionComposer({ isOpen, onClose, onSave, initialData = null, processing = false }) {
@@ -166,10 +168,21 @@ export default function ExamBuilderPage() {
   const [bankQuestions, setBankQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState(false);
+
+  // Discovery / Access Targeting
+  const [branches, setBranches] = useState([]);
+  const [availableBatches, setAvailableBatches] = useState([]);
   
   const [bankSearch, setBankSearch] = useState("");
   const [isEditingMeta, setIsEditingMeta] = useState(false);
-  const [metaForm, setMetaForm] = useState({ title: "", duration: 60, totalMarks: 100, description: "" });
+  const [metaForm, setMetaForm] = useState({ 
+    title: "", 
+    duration: 60, 
+    totalMarks: 100, 
+    description: "",
+    branchId: "",
+    batchId: ""
+  });
 
   const [isComposerOpen, setIsComposerOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState(null);
@@ -181,10 +194,31 @@ export default function ExamBuilderPage() {
   async function loadData() {
     setLoading(true);
     try {
-        const exRes = await orgClient.exams.getById(id);
+        const exRes = await orgClient.exams.getById(id, user.id);
         if (exRes.success) {
             setExam(exRes.exam);
-            setMetaForm({ title: exRes.exam.title, duration: exRes.exam.duration, totalMarks: exRes.exam.totalMarks, description: exRes.exam.description || "" });
+            
+            // Extract current access targeting
+            const currentAccess = exRes.exam.access?.[0] || {};
+            
+            setMetaForm({ 
+              title: exRes.exam.title, 
+              duration: exRes.exam.duration, 
+              totalMarks: exRes.exam.totalMarks, 
+              description: exRes.exam.description || "",
+              branchId: currentAccess.branchId || "",
+              batchId: currentAccess.batchId || ""
+            });
+
+            // Fetch metadata for targeting
+            const branchRes = await orgClient.branches.list(user.collegeId);
+            if (branchRes.success) setBranches(branchRes.branches || []);
+
+            if (currentAccess.branchId) {
+                const batchRes = await orgClient.batches.list(currentAccess.branchId);
+                if (batchRes.success) setAvailableBatches(batchRes.batches || []);
+            }
+
             const qRes = await orgClient.questions.list({ subjectId: exRes.exam.subjectId });
             if (qRes.success) {
                 const linkedIds = new Set(exRes.exam.questions.map(eq => eq.questionId));
@@ -195,25 +229,45 @@ export default function ExamBuilderPage() {
     setLoading(false);
   }
 
+  async function handleBranchChange(branchId) {
+    setMetaForm(prev => ({ ...prev, branchId, batchId: "" }));
+    setAvailableBatches([]);
+    if (branchId) {
+       const res = await orgClient.batches.list(branchId);
+       if (res.success) setAvailableBatches(res.batches || []);
+    }
+  }
+
   const currentTotalMarks = useMemo(() => (exam?.questions || []).reduce((sum, q) => sum + (q.marks || 0), 0), [exam]);
 
   async function handleAdd(question) {
-    if (exam.status !== 'DRAFT') return;
+    if (exam.status !== 'DRAFT' && exam.status !== 'PUBLISHED') return;
     setProcessing(true);
     try {
         const res = await orgClient.exams.addQuestion(id, { questionId: question.id, order: exam.questions.length, marks: question.defaultMarks });
-        if (res.success) loadData();
-    } catch (e) { alert("Failed to add question"); }
+        if (res.success) { toast.success("Question added to exam"); loadData(); }
+    } catch (e) { toast.error("Failed to add question"); }
     setProcessing(false);
   }
 
   async function handleRemove(questionId) {
-    if (exam.status !== 'DRAFT') return;
+    if (exam.status !== 'DRAFT' && exam.status !== 'PUBLISHED') return;
     setProcessing(true);
     try {
         const res = await orgClient.exams.removeQuestion(id, questionId);
+        if (res.success) { toast.success("Question removed"); loadData(); }
+    } catch (e) { toast.error("Failed to remove question"); }
+    setProcessing(false);
+  }
+
+  async function handleDeleteBankQuestion(questionId) {
+    if (!confirm("PURGE ASSET? This will permanently remove the question from the entire institution repository.")) return;
+    setProcessing(true);
+    try {
+        const res = await orgClient.questions.delete(questionId);
         if (res.success) loadData();
-    } catch (e) { alert("Failed to remove question"); }
+        else toast.error(res.message);
+    } catch (e) { toast.error("Deletion failed"); }
     setProcessing(false);
   }
 
@@ -221,8 +275,14 @@ export default function ExamBuilderPage() {
     setProcessing(true);
     try {
         const res = await orgClient.exams.update(id, metaForm);
-        if (res.success) { setIsEditingMeta(false); loadData(); }
-    } catch (e) { alert("Update failed"); }
+        if (res.success) { 
+           toast.success("Assessment configuration saved");
+           setIsEditingMeta(false); 
+           loadData(); 
+        } else {
+           toast.error(res.message);
+        }
+    } catch (e) { toast.error("Update failed"); }
     setProcessing(false);
   }
 
@@ -230,8 +290,8 @@ export default function ExamBuilderPage() {
     setProcessing(true);
     try {
       if (editingQuestion) {
-        const res = await orgClient.questions.update(editingQuestion.id, formData);
-        if (res.success) { setIsComposerOpen(false); loadData(); }
+        const res = await orgClient.questions.update(editingQuestion.id, { ...formData, examId: id });
+        if (res.success) { toast.success("Question updated successfully"); setIsComposerOpen(false); loadData(); }
       } else {
         const res = await orgClient.questions.create({ ...formData, subjectId: exam.subjectId, collegeId: user.collegeId, creatorId: user.id });
         if (res.success) {
@@ -240,7 +300,7 @@ export default function ExamBuilderPage() {
           loadData();
         }
       }
-    } catch (e) { alert("Operation failed"); }
+    } catch (e) { toast.error(e.message); }
     setProcessing(false);
   }
 
@@ -248,10 +308,10 @@ export default function ExamBuilderPage() {
     if (!confirm("Finalize Session? Content snapshots will be generated.")) return;
     setProcessing(true);
     try {
-        const res = await orgClient.exams.publish(id, {});
-        if (res.success) loadData();
-        else alert(res.message);
-    } catch (e) { alert("Publish failed"); }
+        const res = await orgClient.exams.publish(user.id, id, {});
+        if (res.success) { toast.success("Exam published! Snapshots generated."); loadData(); }
+        else toast.error(res.message);
+    } catch (e) { toast.error("Publish failed"); }
     setProcessing(false);
   }
 
@@ -259,10 +319,10 @@ export default function ExamBuilderPage() {
     if (!confirm("Go LIVE? Exam will become active for students.")) return;
     setProcessing(true);
     try {
-        const res = await orgClient.exams.start(id);
-        if (res.success) loadData();
-        else alert(res.message);
-    } catch (e) { alert("Activation failed"); }
+        const res = await orgClient.exams.start(user.id, id);
+        if (res.success) { toast.success("Exam is now LIVE for students!"); loadData(); }
+        else toast.error(res.message);
+    } catch (e) { toast.error("Activation failed"); }
     setProcessing(false);
   }
 
@@ -276,7 +336,7 @@ export default function ExamBuilderPage() {
       <QuestionComposer isOpen={isComposerOpen} onClose={() => setIsComposerOpen(false)} onSave={handleSaveQuestion} initialData={editingQuestion} processing={processing} />
 
       {/* Header Section */}
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-muted/10 shadow-custom">
+      <div className="flex flex-col lg:grid-cols-2 items-start lg:items-center justify-between gap-6 bg-white dark:bg-slate-900 p-8 rounded-[40px] border border-muted/10 shadow-custom">
         <div className="flex items-center gap-6">
            <Link href="/dashboard/teacher/exams">
               <Button variant="ghost" size="icon" className="h-14 w-14 rounded-full border border-muted/10"><ChevronLeft className="w-7 h-7" /></Button>
@@ -316,9 +376,44 @@ export default function ExamBuilderPage() {
             <CardHeader className="p-10 pb-4"><CardTitle className="text-2xl font-black">Assessment Calibration</CardTitle></CardHeader>
             <CardContent className="p-10 pt-4">
                <div className="grid md:grid-cols-4 gap-8">
-                  <div className="md:col-span-2 space-y-3"><Label className="font-black text-xs uppercase opacity-40">Asset Name</Label><Input value={metaForm.title} onChange={e => setMetaForm({...metaForm, title: e.target.value})} className="h-14 rounded-2xl bg-muted/20 border-none font-bold text-lg px-6" /></div>
-                  <div className="space-y-3"><Label className="font-black text-xs uppercase opacity-40">Time Cap</Label><Input type="number" value={metaForm.duration} onChange={e => setMetaForm({...metaForm, duration: e.target.value})} className="h-14 rounded-2xl bg-muted/20 border-none font-black text-lg px-6" /></div>
-                  <div className="space-y-3"><Label className="font-black text-xs uppercase opacity-40">Points Ceiling</Label><Input type="number" value={metaForm.totalMarks} onChange={e => setMetaForm({...metaForm, totalMarks: e.target.value})} className="h-14 rounded-2xl bg-muted/20 border-none font-black text-lg px-6" /></div>
+                  <div className="md:col-span-2 space-y-3">
+                     <Label className="font-black text-xs uppercase opacity-40">Asset Name</Label>
+                     <Input value={metaForm.title} onChange={e => setMetaForm({...metaForm, title: e.target.value})} className="h-14 rounded-2xl bg-muted/20 border-none font-bold text-lg px-6" />
+                  </div>
+                  <div className="space-y-3">
+                     <Label className="font-black text-xs uppercase opacity-40">Time Cap (Mins)</Label>
+                     <Input type="number" value={metaForm.duration} onChange={e => setMetaForm({...metaForm, duration: e.target.value})} className="h-14 rounded-2xl bg-muted/20 border-none font-black text-lg px-6" />
+                  </div>
+                  <div className="space-y-3">
+                     <Label className="font-black text-xs uppercase opacity-40">Points Ceiling</Label>
+                     <Input type="number" value={metaForm.totalMarks} onChange={e => setMetaForm({...metaForm, totalMarks: e.target.value})} className="h-14 rounded-2xl bg-muted/20 border-none font-black text-lg px-6" />
+                  </div>
+                  
+                  {/* Phase 4.4: Target Audience Selection */}
+                  <div className="md:col-span-2 space-y-3">
+                     <Label className="font-black text-xs uppercase opacity-40">Target Branch (Primary Audience)</Label>
+                     <select 
+                       className="w-full h-14 rounded-2xl bg-muted/20 border-none font-bold px-6 appearance-none cursor-pointer"
+                       value={metaForm.branchId}
+                       onChange={(e) => handleBranchChange(e.target.value)}
+                     >
+                        <option value="">Select Target Branch...</option>
+                        {branches?.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                     </select>
+                  </div>
+                  <div className="md:col-span-2 space-y-3">
+                     <Label className="font-black text-xs uppercase opacity-40">Target Batch (Specific Cohort - Optional)</Label>
+                     <select 
+                       className="w-full h-14 rounded-2xl bg-muted/20 border-none font-bold px-6 appearance-none cursor-pointer"
+                       value={metaForm.batchId}
+                       onChange={(e) => setMetaForm({ ...metaForm, batchId: e.target.value })}
+                       disabled={!metaForm.branchId}
+                     >
+                        <option value="">All Students in Branch</option>
+                        {availableBatches?.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                     </select>
+                  </div>
+
                   <div className="md:col-span-4 flex items-center gap-4 pt-4 border-t border-muted/10 mt-2">
                      <Button variant="ghost" onClick={() => setIsEditingMeta(false)} className="h-14 flex-1 rounded-2xl font-black uppercase text-[11px]">Discard</Button>
                      <Button onClick={handleSaveMeta} disabled={processing} className="h-14 flex-1 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black flex gap-2 uppercase text-[11px]"><Save className="w-5 h-5" /> Save Assessment Attributes</Button>
@@ -378,42 +473,69 @@ export default function ExamBuilderPage() {
                  {filteredBank.length === 0 ? (
                     <div className="p-20 text-center border-4 border-dashed rounded-[40px] bg-muted/5 italic text-muted-foreground/40 font-bold uppercase tracking-widest text-xs">Registry Empty</div>
                  ) : (
-                    filteredBank.map(q => (
-                       <Card key={q.id} className="group hover:border-indigo-600/30 transition-all shadow-md rounded-[28px] border border-muted/10 bg-white border-b-4 border-b-muted/10 active:scale-[0.98]">
-                          <CardContent className="p-6 flex gap-6">
-                             <div className="flex-1">
-                                <div className="flex items-center gap-3 mb-4">
-                                   <Badge className="text-[10px] font-black uppercase bg-slate-100 text-slate-800" variant="secondary">{q.type.replace('_', ' ')}</Badge>
-                                   <span className="text-[10px] font-black text-emerald-600/60 uppercase">{q.defaultMarks} Marks Assets</span>
-                                </div>
-                                <p className="text-xl font-bold text-slate-800 leading-tight">{q.text}</p>
-                             </div>
-                             <div className="flex flex-col gap-2">
-                                {(exam.status === 'DRAFT' || exam.status === 'PUBLISHED') && (
-                                   <Button 
-                                     size="icon" 
-                                     variant="ghost" 
-                                     onClick={() => { setEditingQuestion(q); setIsComposerOpen(true); }}
-                                     className="h-10 w-10 text-muted-foreground hover:bg-indigo-50 hover:text-indigo-600 rounded-full"
-                                   >
-                                      <Edit3 className="w-5 h-5" />
-                                   </Button>
-                                )}
-                                {exam.status === 'DRAFT' && (
-                                   <Button 
-                                     size="icon" 
-                                     variant="ghost" 
-                                     onClick={() => handleAdd(q)} 
-                                     disabled={processing}
-                                     className="h-10 w-10 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
-                                   >
-                                      <Plus className="w-6 h-6" />
-                                   </Button>
-                                )}
-                             </div>
-                          </CardContent>
-                       </Card>
-                    ))
+                    filteredBank.map(q => {
+                       const isLocked = q.exams?.some(usage => usage.exam.status === 'ACTIVE' || usage.exam.status === 'COMPLETED');
+                       return (
+                        <Card key={q.id} className="group hover:border-indigo-600/30 transition-all shadow-md rounded-[28px] border border-muted/10 bg-white border-b-4 border-b-muted/10 active:scale-[0.98]">
+                            <CardContent className="p-6 flex flex-col gap-4">
+                              <div className="flex gap-6">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-3 mb-4">
+                                        <Badge className="text-[10px] font-black uppercase bg-slate-100 text-slate-800" variant="secondary">{q.type.replace('_', ' ')}</Badge>
+                                        <span className="text-[10px] font-black text-emerald-600/60 uppercase">{q.defaultMarks} Marks Assets</span>
+                                    </div>
+                                    <p className="text-xl font-bold text-slate-800 leading-tight">{q.text}</p>
+                                  </div>
+                                  <div className="flex flex-col gap-2">
+                                    {(exam.status === 'DRAFT' || exam.status === 'PUBLISHED') && (
+                                        <Button 
+                                          size="icon" 
+                                          variant="ghost" 
+                                          onClick={() => { setEditingQuestion(q); setIsComposerOpen(true); }}
+                                          className="h-10 w-10 text-muted-foreground hover:bg-indigo-50 hover:text-indigo-600 rounded-full"
+                                        >
+                                          <Edit3 className="w-5 h-5" />
+                                        </Button>
+                                    )}
+                                    {!isLocked && (
+                                        <Button 
+                                          size="icon" 
+                                          variant="ghost" 
+                                          onClick={() => handleDeleteBankQuestion(q.id)}
+                                          className="h-10 w-10 text-muted-foreground hover:bg-rose-50 hover:text-rose-600 rounded-full"
+                                        >
+                                          <Trash2 className="w-5 h-5" />
+                                        </Button>
+                                    )}
+                                    {(exam.status === 'DRAFT' || exam.status === 'PUBLISHED') && (
+                                        <Button 
+                                          size="icon" 
+                                          variant="ghost" 
+                                          onClick={() => handleAdd(q)} 
+                                          disabled={processing}
+                                          className="h-10 w-10 rounded-full bg-emerald-50 text-emerald-600 hover:bg-emerald-100"
+                                        >
+                                          <Plus className="w-6 h-6" />
+                                        </Button>
+                                    )}
+                                  </div>
+                              </div>
+
+                              {/* Asset Traceability Metadata */}
+                              {q.exams && q.exams.length > 0 && (
+                                  <div className="pt-4 border-t border-slate-50 flex flex-wrap items-center gap-2">
+                                    <span className="text-[8px] font-black uppercase text-slate-300 tracking-widest mr-1">Utilized In:</span>
+                                    {q.exams.map((usage, i) => (
+                                        <div key={i} className="px-2 py-0.5 rounded-md bg-slate-50 border border-slate-100/50 text-[9px] font-bold text-slate-400 whitespace-nowrap">
+                                          {usage.exam.title}
+                                        </div>
+                                    ))}
+                                  </div>
+                              )}
+                            </CardContent>
+                        </Card>
+                       );
+                    })
                  )}
               </div>
            </div>
@@ -435,8 +557,15 @@ export default function ExamBuilderPage() {
                        </div>
                        <div className="flex items-center gap-3">
                           <div className="flex items-center gap-2 h-10 px-4 bg-slate-50 rounded-xl border border-muted/10"><span className="text-[10px] font-black uppercase opacity-60">Weightage:</span><span className="text-sm font-black text-indigo-700">{eq.marks} PTS</span></div>
-                          {(exam.status === 'DRAFT' || exam.status === 'PUBLISHED') && <Button size="icon" variant="ghost" onClick={() => { setEditingQuestion(eq.question); setIsComposerOpen(true); }} className="h-10 w-10 text-muted-foreground hover:bg-indigo-50 hover:text-indigo-600 rounded-full"><Edit3 className="w-5 h-5" /></Button>}
-                          {exam.status === 'DRAFT' && <Button size="icon" variant="ghost" onClick={() => handleRemove(eq.questionId)} disabled={processing} className="h-10 w-10 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 rounded-full active:scale-95"><Trash2 className="w-5 h-5" /></Button>}
+                          {(exam.status === 'DRAFT' || exam.status === 'PUBLISHED') && (
+                             <>
+                                <Button size="icon" variant="ghost" onClick={() => { setEditingQuestion(eq.question); setIsComposerOpen(true); }} className="h-10 w-10 text-muted-foreground hover:bg-indigo-50 hover:text-indigo-600 rounded-full"><Edit3 className="w-5 h-5" /></Button>
+                                {!eq.question.exams?.some(usage => usage.exam.status === 'ACTIVE' || usage.exam.status === 'COMPLETED') && (
+                                   <Button size="icon" variant="ghost" onClick={() => handleDeleteBankQuestion(eq.questionId)} className="h-10 w-10 text-muted-foreground hover:bg-rose-50 hover:text-rose-600 rounded-full" title="Purge from Repository"><Trash className="w-5 h-5" /></Button>
+                                )}
+                             </>
+                          )}
+                          {(exam.status === 'DRAFT' || exam.status === 'PUBLISHED') && <Button size="icon" variant="ghost" onClick={() => handleRemove(eq.questionId)} disabled={processing} className="h-10 w-10 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 rounded-full active:scale-95"><Trash2 className="w-5 h-5" /></Button>}
                        </div>
                     </CardHeader>
                     <CardContent className="p-6 pt-0">

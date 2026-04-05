@@ -2,7 +2,7 @@ import prisma from "../prisma.js";
 
 // --- Exam Creation ---
 export async function createDraftExam(teacherId, data) {
-  const { title, description, semester, duration, totalMarks, passingMarks, collegeId, subjectId } = data;
+  const { title, description, semester, duration, totalMarks, passingMarks, collegeId, subjectId, branchId, batchId } = data;
 
   if (!title || !duration || !totalMarks || !collegeId || !subjectId) {
     throw new Error("Missing required exam fields");
@@ -26,6 +26,12 @@ export async function createDraftExam(teacherId, data) {
       collegeId,
       subjectId,
       creatorId: teacherId,
+      access: (branchId || batchId) ? {
+        create: {
+          branchId: branchId || null,
+          batchId: batchId || null
+        }
+      } : undefined
     }
   });
 }
@@ -35,7 +41,7 @@ export async function addQuestionToExam(teacherId, examId, questionId, order, ma
   // Authorize
   const exam = await prisma.exam.findUnique({ where: { id: examId } });
   if (!exam || exam.creatorId !== teacherId) throw new Error("Forbidden: Not your exam");
-  if (exam.status !== "DRAFT") throw new Error("Cannot add questions to an exam that is not a DRAFT");
+  if (exam.status !== "DRAFT" && exam.status !== "PUBLISHED") throw new Error("Cannot modify questions for this assessment phase.");
 
   const question = await prisma.question.findUnique({ 
     where: { id: questionId },
@@ -62,7 +68,7 @@ export async function addQuestionToExam(teacherId, examId, questionId, order, ma
 export async function removeQuestionFromExam(teacherId, examId, questionId) {
   const exam = await prisma.exam.findUnique({ where: { id: examId } });
   if (!exam || exam.creatorId !== teacherId) throw new Error("Forbidden");
-  if (exam.status !== "DRAFT") throw new Error("Cannot modify questions of a published exam");
+  if (exam.status !== "DRAFT" && exam.status !== "PUBLISHED") throw new Error("Cannot modify questions for this assessment phase.");
 
   return prisma.examQuestion.delete({
     where: { examId_questionId: { examId, questionId } }
@@ -199,30 +205,62 @@ export async function startExam(teacherId, examId) {
 }
 
 export async function updateExam(id, teacherId, data) {
-  const exam = await prisma.exam.findUnique({ where: { id } });
+  const exam = await prisma.exam.findUnique({ where: { id }, include: { access: true } });
   if (!exam || exam.creatorId !== teacherId) throw new Error("Unauthorized");
-  if (exam.status !== "DRAFT") throw new Error("Only DRAFT exams can be modified");
+  
+  if (exam.status !== "DRAFT" && exam.status !== "PUBLISHED") {
+    throw new Error("Only draft and published exams can be modified");
+  }
 
-  const { title, description, semester, duration, totalMarks, passingMarks, subjectId } = data;
+  const { title, description, semester, duration, totalMarks, passingMarks, subjectId, branchId, batchId } = data;
 
-  return prisma.exam.update({
-    where: { id },
-    data: {
-      title,
-      description,
-      semester: semester ? parseInt(semester, 10) : undefined,
-      duration: duration ? parseInt(duration, 10) : undefined,
-      totalMarks: totalMarks ? parseInt(totalMarks, 10) : undefined,
-      passingMarks: passingMarks ? parseInt(passingMarks, 10) : undefined,
-      subjectId
+  return prisma.$transaction(async (tx) => {
+    // 1. Update core metadata
+    const updated = await tx.exam.update({
+      where: { id },
+      data: {
+        title,
+        description,
+        semester: semester ? parseInt(semester, 10) : undefined,
+        duration: duration ? parseInt(duration, 10) : undefined,
+        totalMarks: totalMarks ? parseInt(totalMarks, 10) : undefined,
+        passingMarks: passingMarks ? parseInt(passingMarks, 10) : undefined,
+        subjectId
+      }
+    });
+
+    // 2. Manage Access Control (Atomic Upsert)
+    if (branchId || batchId) {
+      if (exam.access.length > 0) {
+        await tx.examAccess.update({
+          where: { id: exam.access[0].id },
+          data: {
+            branchId: branchId || null,
+            batchId: batchId || null
+          }
+        });
+      } else {
+        await tx.examAccess.create({
+          data: {
+            examId: id,
+            branchId: branchId || null,
+            batchId: batchId || null
+          }
+        });
+      }
     }
+
+    return updated;
   });
 }
 
 export async function deleteExam(id, teacherId) {
   const exam = await prisma.exam.findUnique({ where: { id } });
   if (!exam || exam.creatorId !== teacherId) throw new Error("Unauthorized");
-  if (exam.status !== "DRAFT") throw new Error("Only DRAFT exams can be deleted");
+  
+  if (exam.status !== "DRAFT" && exam.status !== "PUBLISHED") {
+    throw new Error("Only draft and published exams can be deleted");
+  }
 
   return prisma.exam.delete({ where: { id } });
 }

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { CheckCircle2, XCircle, AlertCircle, Save, ArrowLeft, User, Book } from "lucide-react";
+import { toast } from "sonner";
 
 export default function AttemptGrader() {
   const { id } = useParams();
@@ -53,12 +54,12 @@ export default function AttemptGrader() {
       });
       const data = await res.json();
       if (data.success) {
-        alert("Grade saved successfully");
+        toast.error("Grade saved successfully");
       } else {
-        alert("Error: " + data.message);
+        toast.error("Error: " + data.message);
       }
     } catch (e) {
-      alert("Error saving grade");
+      toast.error("Error saving grade");
     }
     setSaving(false);
   };

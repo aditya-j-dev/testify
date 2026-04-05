@@ -35,7 +35,8 @@ export async function PATCH(req, { params }) {
 
     const { id } = await params;
     const body = await req.json();
-    const question = await updateQuestion(id, auth.userId, body);
+    const { examId, ...data } = body;
+    const question = await updateQuestion(id, auth.userId, data, examId);
     return Response.json({ success: true, question });
   } catch (error) {
     return Response.json({ success: false, message: error.message }, { status: 400 });

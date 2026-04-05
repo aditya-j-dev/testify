@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 import { 
   Plus, 
   Search, 
@@ -19,7 +20,8 @@ import {
   Circle, 
   Layers,
   FileText,
-  Filter
+  Filter,
+  Link2
 } from "lucide-react";
 
 export default function QuestionsPage() {
@@ -113,7 +115,7 @@ export default function QuestionsPage() {
 
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!formData.subjectId) return alert("Select a subject");
+    if (!formData.subjectId) return toast.error("Select a subject");
     
     try {
         let res;
@@ -139,7 +141,7 @@ export default function QuestionsPage() {
           });
           loadInitialData();
         }
-    } catch (e) { alert("Action failed"); }
+    } catch (e) { toast.error("Action failed"); }
   }
 
   async function handleDelete(id) {
@@ -147,7 +149,7 @@ export default function QuestionsPage() {
     try {
         const res = await orgClient.questions.delete(id);
         if (res.success) loadInitialData();
-    } catch (e) { alert("Deletion failed"); }
+    } catch (e) { toast.error("Deletion failed"); }
   }
 
   const filteredQuestions = (questions || []).filter(q => {
@@ -420,6 +422,21 @@ export default function QuestionsPage() {
                               "{q.modelAnswer}"
                            </div>
                         </CardContent>
+                     )}
+                     {q.exams && q.exams.length > 0 && (
+                       <div className="px-6 pb-5 flex items-center justify-end gap-2 flex-wrap border-t border-muted/10 pt-3 mt-1">
+                         <span className="text-[9px] font-black uppercase tracking-widest text-muted-foreground/40 flex items-center gap-1 mr-1">
+                           <Link2 className="w-3 h-3" /> Used in
+                         </span>
+                         {q.exams.map((eq) => (
+                           <span
+                             key={eq.exam?.title}
+                             className="text-[10px] font-black px-2.5 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800"
+                           >
+                             {eq.exam?.title}
+                           </span>
+                         ))}
+                       </div>
                      )}
                   </Card>
                ))}

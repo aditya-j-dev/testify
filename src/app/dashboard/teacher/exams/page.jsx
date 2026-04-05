@@ -20,12 +20,15 @@ import {
   AlertCircle
 } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 
 export default function FacultyExamsPage() {
   const { user } = useAuth();
   
   const [exams, setExams] = useState([]);
   const [subjects, setSubjects] = useState([]);
+  const [branches, setBranches] = useState([]);
+  const [availableBatches, setAvailableBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   
@@ -37,7 +40,9 @@ export default function FacultyExamsPage() {
     duration: 60,
     totalMarks: 100,
     subjectId: "",
-    semester: 1
+    semester: 1,
+    branchId: "",
+    batchId: ""
   });
 
   useEffect(() => {
@@ -52,6 +57,9 @@ export default function FacultyExamsPage() {
         const subRes = await orgClient.subjects.list(user.collegeId);
         if (subRes.success) setSubjects(subRes.subjects);
 
+        const brRes = await orgClient.branches.list(user.collegeId);
+        if (brRes.success) setBranches(brRes.branches || []);
+
         const exRes = await orgClient.exams.list();
         if (exRes.success) setExams(exRes.exams);
     } catch (e) {
@@ -60,19 +68,34 @@ export default function FacultyExamsPage() {
     setLoading(false);
   }
 
+  async function handleBranchChange(branchId) {
+    setFormData(prev => ({ ...prev, branchId, batchId: "" }));
+    setAvailableBatches([]);
+    if (branchId) {
+      const bRes = await orgClient.batches.list(branchId);
+      if (bRes.success) setAvailableBatches(bRes.batches || []);
+    }
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!formData.subjectId) return alert("Select a subject");
+    if (!formData.subjectId) return toast.error("Select a subject");
     
     try {
         const res = await orgClient.exams.create(formData);
         if (res.success) {
           setIsAdding(false);
+          setFormData({
+            title: "", description: "", duration: 60,
+            totalMarks: 100, subjectId: "", semester: 1,
+            branchId: "", batchId: ""
+          });
+          setAvailableBatches([]);
           loadInitialData();
-          // Navigate to the builder or stay here? 
-          // For now stays here to see the list update.
+        } else {
+          toast.error(res.message || "Draft creation failed");
         }
-    } catch (e) { alert("Draft creation failed"); }
+    } catch (e) { toast.error("Draft creation failed"); }
   }
 
   async function handleDelete(id) {
@@ -80,8 +103,8 @@ export default function FacultyExamsPage() {
     try {
         const res = await orgClient.exams.delete(id);
         if (res.success) loadInitialData();
-        else alert(res.message);
-    } catch (e) { alert("Deletion failed"); }
+        else toast.error(res.message);
+    } catch (e) { toast.error("Deletion failed"); }
   }
 
   const filteredExams = (exams || []).filter(ex => 
@@ -153,6 +176,31 @@ export default function FacultyExamsPage() {
                       >
                         <option value="">-- Choose Subject --</option>
                         {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-bold text-indigo-900 dark:text-indigo-100">Target Branch</Label>
+                      <select
+                        className="w-full h-11 rounded-xl border border-muted-foreground/20 bg-background px-3 py-2 text-sm focus:ring-4 focus:ring-indigo-100 transition-all font-medium"
+                        value={formData.branchId}
+                        onChange={(e) => handleBranchChange(e.target.value)}
+                      >
+                        <option value="">All Branches (College-Wide)</option>
+                        {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-bold text-indigo-900 dark:text-indigo-100">
+                        Target Batch <span className="font-normal text-muted-foreground text-xs">(optional)</span>
+                      </Label>
+                      <select
+                        className="w-full h-11 rounded-xl border border-muted-foreground/20 bg-background px-3 py-2 text-sm focus:ring-4 focus:ring-indigo-100 transition-all font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                        value={formData.batchId}
+                        onChange={(e) => setFormData({...formData, batchId: e.target.value})}
+                        disabled={!formData.branchId}
+                      >
+                        <option value="">All Students in Branch</option>
+                        {availableBatches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
                       </select>
                     </div>
                     <div className="grid grid-cols-2 gap-4">

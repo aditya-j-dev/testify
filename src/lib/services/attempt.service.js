@@ -14,19 +14,26 @@ export async function getAvailableExams(userId) {
 
   // Find exams where:
   // 1. Status is ACTIVE
-  // 2. Access matches student's branch OR batch OR both
   const exams = await prisma.exam.findMany({
     where: {
       collegeId: user.collegeId,
       status: 'ACTIVE',
-      access: {
-        some: {
-          OR: [
-            { branchId: user.branchId, batchId: null }, // Entire branch
-            { batchId: user.batchId } // Specific batch
-          ]
+      AND: [
+        {
+          access: {
+            some: {
+              OR: [
+                // Case 1: Targeted specifically to the student's batch
+                { batchId: user.batchId },
+                // Case 2: Targeted to the student's branch (as a whole, with no specific batch restriction)
+                { branchId: user.branchId, batchId: null },
+                // Case 3: Targeted to the entire college (both null)
+                { branchId: null, batchId: null }
+              ]
+            }
+          }
         }
-      }
+      ]
     },
     include: {
       subject: true,

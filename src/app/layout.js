@@ -2,6 +2,7 @@ import { Instrument_Serif, Outfit } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/context/auth-context";
+import { Toaster } from "sonner";
 
 const instrumentSerif = Instrument_Serif({
   weight: "400",
@@ -29,6 +30,7 @@ export default function RootLayout({ children }) {
         <ThemeProvider>
           <AuthProvider>
             {children}
+            <Toaster richColors position="bottom-right" />
           </AuthProvider>
         </ThemeProvider>
       </body>
