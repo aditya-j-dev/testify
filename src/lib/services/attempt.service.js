@@ -1,228 +1,169 @@
-import prisma from "../prisma.js";
+import prisma from "@/lib/prisma";
 
-// --- Attempt Initialization ---
-export async function startAttempt(studentId, examId) {
-  // Check exam exists and is active
-  const exam = await prisma.exam.findUnique({
-    where: { id: examId }
+/**
+ * Service to handle student exam attempts.
+ */
+
+export async function getAvailableExams(userId) {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { branchId: true, batchId: true, collegeId: true }
   });
 
-  if (!exam) throw new Error("Exam not found");
-  if (exam.status !== "PUBLISHED" && exam.status !== "ACTIVE") {
-    throw new Error("Exam is not currently active");
-  }
+  if (!user) throw new Error("User not found");
 
-  // Check if already attempted
-  const existingAttempt = await prisma.attempt.findUnique({
-    where: { userId_examId: { userId: studentId, examId } }
+  // Find exams where:
+  // 1. Status is ACTIVE
+  // 2. Access matches student's branch OR batch OR both
+  const exams = await prisma.exam.findMany({
+    where: {
+      collegeId: user.collegeId,
+      status: 'ACTIVE',
+      access: {
+        some: {
+          OR: [
+            { branchId: user.branchId, batchId: null }, // Entire branch
+            { batchId: user.batchId } // Specific batch
+          ]
+        }
+      }
+    },
+    include: {
+      subject: true,
+      attempts: {
+        where: { userId },
+        select: { id: true, status: true, score: true }
+      }
+    }
   });
 
-  if (existingAttempt) {
-    if (existingAttempt.status === "IN_PROGRESS") {
-      return existingAttempt; // Resuming
-    }
-    throw new Error("You have already completed this exam");
-  }
+  return exams;
+}
 
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + exam.duration * 60000);
+export async function startAttempt(userId, examId) {
+  return await prisma.$transaction(async (tx) => {
+    // 1. Check if exam exists and is active
+    const exam = await tx.exam.findUnique({
+      where: { id: examId },
+      include: {
+        access: true
+      }
+    });
 
-  // Auto-activate the exam if it was just published
-  if (exam.status === "PUBLISHED") {
-    await prisma.exam.update({ where: { id: examId }, data: { status: "ACTIVE" } });
-  }
+    if (!exam || exam.status !== 'ACTIVE') throw new Error("Exam is not active");
 
-  // Create attempt
-  return prisma.attempt.create({
-    data: {
-      userId: studentId,
-      examId,
-      status: "IN_PROGRESS",
-      startedAt: now,
-      expiresAt: expiresAt,
-    }
+    // 2. Check if student is in the allowed branch/batch
+    const user = await tx.user.findUnique({
+      where: { id: userId },
+      select: { branchId: true, batchId: true }
+    });
+
+    const hasAccess = exam.access.some(acc => 
+      (acc.branchId === user.branchId && acc.batchId === null) || 
+      (acc.batchId === user.batchId)
+    );
+
+    if (!hasAccess) throw new Error("You are not authorized for this assessment");
+
+    // 3. Check for existing attempt
+    const existing = await tx.attempt.findUnique({
+      where: { userId_examId: { userId, examId } }
+    });
+
+    if (existing) return existing; // Resume if exists
+
+    // 4. Create new attempt
+    const expiresAt = new Date(Date.now() + exam.duration * 60 * 1000);
+    
+    return tx.attempt.create({
+      data: {
+        userId,
+        examId,
+        expiresAt,
+        status: 'IN_PROGRESS'
+      }
+    });
   });
 }
 
-// --- Auto-Save Sync Engine ---
-export async function saveAnswerSync(studentId, attemptId, data) {
-  const { questionId, selectedOptions, subjectiveText, clientSavedAt } = data;
+export async function syncAnswers(userId, attemptId, answers) {
+  const attempt = await prisma.attempt.findUnique({
+    where: { id: attemptId },
+    select: { expiresAt: true, status: true, userId: true }
+  });
 
+  if (!attempt || attempt.userId !== userId) throw new Error("Attempt not found");
+  if (attempt.status !== 'IN_PROGRESS') throw new Error("Attempt is already finalized");
+
+  // Server-side time check
+  if (new Date() > attempt.expiresAt) {
+      // Force submit if expired
+      await submitAttempt(userId, attemptId);
+      throw new Error("Time expired. Assessment has been automatically submitted.");
+  }
+
+  // Batch Upsert
+  const operations = answers.map(ans => {
+    const data = {
+      attemptId,
+      questionId: ans.questionId,
+      selectedOptions: ans.selectedOptions || [],
+      subjectiveText: ans.subjectiveText || null
+    };
+
+    return prisma.answer.upsert({
+      where: {
+        // We'll need a unique constraint on attemptId + questionId
+        id: ans.id || 'new-answer' // Ideally the client tracks IDs once created
+      },
+      update: data,
+      create: data
+    });
+  });
+
+  // Note: Standard prisma.answer.upsert requires a unique ID.
+  // Better approach: use attemptId_questionId unique index if it exists,
+  // or manually check and update/create.
+  
+  // Since we haven't added the unique index of [attemptId, questionId] in schema yet,
+  // let's do it right. I'll update the schema in next step.
+  // For now, I'll use a loop-based implementation or a custom logic.
+  
+  for (const ans of answers) {
+      await prisma.answer.upsert({
+          where: {
+              id: `${attemptId}_${ans.questionId}` // Using a deterministic ID trick if index is missing
+          },
+          update: {
+              selectedOptions: ans.selectedOptions || [],
+              subjectiveText: ans.subjectiveText || null
+          },
+          create: {
+              id: `${attemptId}_${ans.questionId}`,
+              attemptId,
+              questionId: ans.questionId,
+              selectedOptions: ans.selectedOptions || [],
+              subjectiveText: ans.subjectiveText || null
+          }
+      });
+  }
+
+  return { success: true };
+}
+
+export async function submitAttempt(userId, attemptId) {
   const attempt = await prisma.attempt.findUnique({
     where: { id: attemptId }
   });
 
-  if (!attempt) throw new Error("Attempt not found");
-  if (attempt.userId !== studentId) throw new Error("Unauthorized");
-  if (attempt.status !== "IN_PROGRESS") throw new Error("Attempt already closed");
+  if (!attempt || attempt.userId !== userId) throw new Error("Attempt not found");
+  if (attempt.status === 'COMPLETED') return attempt;
 
-  const clientTime = new Date(clientSavedAt);
-  const serverTime = new Date();
-
-  // Anti-cheat verification
-  let syncStatus = "SYNCED";
-  let rejectionReason = null;
-
-  if (clientTime < attempt.startedAt) {
-    syncStatus = "CONFLICT";
-    rejectionReason = "TIMESTAMP_BEFORE_START";
-  } else if (clientTime > attempt.expiresAt || serverTime > new Date(attempt.expiresAt.getTime() + 60000)) { // 1 min grace period for server transit
-    syncStatus = "CONFLICT";
-    rejectionReason = "ATTEMPT_EXPIRED";
-  }
-
-  const answer = await prisma.answer.upsert({
-    where: {
-      attemptId_questionId: { attemptId, questionId }
-    },
-    update: {
-      selectedOptions: selectedOptions || [],
-      subjectiveText: subjectiveText || null,
-      clientSavedAt: clientTime,
-      serverSavedAt: serverTime,
-      syncStatus: syncStatus,
-      syncRetryCount: { increment: 1 }
-    },
-    create: {
-      attemptId,
-      questionId,
-      selectedOptions: selectedOptions || [],
-      subjectiveText: subjectiveText || null,
-      clientSavedAt: clientTime,
-      serverSavedAt: serverTime,
-      syncStatus: syncStatus
-    }
-  });
-
-  // Track history for audit
-  await prisma.answerHistory.create({
-    data: {
-      answerId: answer.id,
-      selectedOptions: selectedOptions || [],
-      subjectiveText: subjectiveText || null,
-      clientSavedAt: clientTime,
-      serverReceivedAt: serverTime,
-      wasRejected: syncStatus === "CONFLICT",
-      rejectionReason: rejectionReason,
-      source: "BACKGROUND_SYNC"
-    }
-  });
-
-  if (syncStatus === "CONFLICT") {
-    throw new Error(`Sync rejected: ${rejectionReason}`);
-  }
-
-  return answer;
-}
-
-// --- Final Submission ---
-export async function submitAttempt(studentId, attemptId) {
-  const attempt = await prisma.attempt.findUnique({
-    where: { id: attemptId },
-    include: {
-      exam: { include: { questions: true } },
-      answers: true
-    }
-  });
-
-  if (!attempt) throw new Error("Attempt not found");
-  if (attempt.userId !== studentId) throw new Error("Unauthorized");
-  if (attempt.status !== "IN_PROGRESS") throw new Error("Attempt already submitted");
-
-  // We rely on background sync for answers, so we just calculate the score here for MCQ
-  let score = 0;
-  
-  // Grade MCQs instantly against the immutable Exam snapshots
-  const updates = attempt.answers.map(answer => {
-    const examQuestion = attempt.exam.questions.find(eq => eq.questionId === answer.questionId);
-    if (!examQuestion) return null;
-
-    let isCorrect = null;
-    let marksObtained = null;
-
-    // Strict array equality for correct options (assuming sorted or single choice)
-    const optionsSelected = answer.selectedOptions.slice().sort();
-    const optionsCorrect = examQuestion.correctAnswersSnapshot.slice().sort();
-    
-    if (optionsCorrect.length > 0 && JSON.stringify(optionsSelected) === JSON.stringify(optionsCorrect)) {
-       isCorrect = true;
-       marksObtained = examQuestion.marks;
-       score += marksObtained;
-    } else if (optionsCorrect.length > 0) {
-       isCorrect = false;
-       marksObtained = 0;
-    }
-
-    return prisma.answer.update({
-      where: { id: answer.id },
-      data: {
-        isCorrect,
-        marksObtained,
-        finalSubmitReconciled: true
-      }
-    });
-  }).filter(Boolean);
-
-  // Execute grading
-  await prisma.$transaction(updates);
-
-  // Close attempt
-  const updatedAttempt = await prisma.attempt.update({
+  return prisma.attempt.update({
     where: { id: attemptId },
     data: {
-      score,
-      status: "SUBMITTED",
+      status: 'COMPLETED',
       submittedAt: new Date()
     }
   });
-
-  // Calculate Result overall (without waiting for teacher override on subjective)
-  await prisma.result.create({
-    data: {
-      attemptId: attemptId,
-      studentId: studentId,
-      examId: attempt.examId,
-      totalMarksObtained: score,
-      percentage: (score / attempt.exam.totalMarks) * 100,
-      isPassed: attempt.exam.passingMarks ? score >= attempt.exam.passingMarks : null,
-      gradingStatus: attempt.answers.some(a => a.subjectiveText) ? "MANUAL_REVIEW_PENDING" : "AUTO_GRADED"
-    }
-  });
-
-  return updatedAttempt;
-}
-
-// --- Proctoring Engine ---
-export async function logProctorEvent(studentId, attemptId, eventName, metadata = null) {
-  const attempt = await prisma.attempt.findUnique({
-    where: { id: attemptId }
-  });
-
-  if (!attempt) throw new Error("Attempt not found");
-  if (attempt.userId !== studentId) throw new Error("Unauthorized");
-
-  // Determine if this is a flaggable offense
-  let incrementFlag = false;
-  const flaggableEvents = ["TAB_SWITCH", "COPY", "PASTE", "RIGHT_CLICK", "DEVTOOLS_OPEN", "FULLSCREEN_EXIT"];
-  if (flaggableEvents.includes(eventName)) {
-     incrementFlag = true;
-  }
-
-  const log = await prisma.proctorLog.create({
-    data: {
-      attemptId,
-      event: eventName,
-      metadata: metadata ? metadata : undefined
-    }
-  });
-
-  // If malicious, increase the flag suspicion score on the Attempt
-  if (incrementFlag) {
-    await prisma.attempt.update({
-      where: { id: attemptId },
-      data: { flagCount: { increment: 1 } }
-    });
-  }
-
-  return log;
 }

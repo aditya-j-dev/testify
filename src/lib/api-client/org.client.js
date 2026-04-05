@@ -197,6 +197,10 @@ export const orgClient = {
          body: JSON.stringify(data),
        });
        return res.json();
+    },
+    async start(id) {
+       const res = await fetch(`/api/org/exams/${id}/start`, { method: "POST" });
+       return res.json();
     }
   }
 };
