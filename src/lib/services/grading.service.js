@@ -113,33 +113,36 @@ export async function calculateSemesterGPA(studentId, semester) {
 // --- Query Methods for UI ---
 
 export async function getPendingGradingExams(teacherId) {
-  // Find exams created by this teacher that have pending results
+  // Find exams created by this teacher that have any results (pending or auto-graded)
   const exams = await prisma.exam.findMany({
     where: {
       creatorId: teacherId,
       results: {
-        some: { gradingStatus: "MANUAL_REVIEW_PENDING" }
+        some: {} // Any result
       }
     },
     include: {
-      _count: {
-        select: {
-          results: {
-            where: { gradingStatus: "MANUAL_REVIEW_PENDING" }
-          }
-        }
+      results: {
+        select: { gradingStatus: true }
       },
       subject: true
     }
   });
 
-  return exams.map(e => ({
-    id: e.id,
-    title: e.title,
-    subject: e.subject.name,
-    pendingCount: e._count.results,
-    updatedAt: e.updatedAt
-  }));
+  return exams.map(e => {
+    const pendingCount = e.results.filter(r => r.gradingStatus === "MANUAL_REVIEW_PENDING").length;
+    const completedCount = e.results.length - pendingCount;
+    
+    return {
+      id: e.id,
+      title: e.title,
+      subject: e.subject.name,
+      pendingCount,
+      completedCount,
+      totalCount: e.results.length,
+      updatedAt: e.updatedAt
+    };
+  });
 }
 
 export async function getExamAttemptsForGrading(teacherId, examId) {
@@ -171,6 +174,11 @@ export async function getFullAttemptForGrading(teacherId, attemptId) {
       exam: {
         include: {
           questions: {
+            include: { 
+              question: {
+                include: { options: true }
+              } 
+            },
             orderBy: { order: 'asc' }
           }
         }
@@ -182,7 +190,8 @@ export async function getFullAttemptForGrading(teacherId, attemptId) {
         include: {
           question: true
         }
-      }
+      },
+      result: true
     }
   });
 
@@ -190,6 +199,148 @@ export async function getFullAttemptForGrading(teacherId, attemptId) {
   if (attempt.exam.creatorId !== teacherId) throw new Error("Unauthorized");
 
   return attempt;
+}
+
+
+export async function autoGradeAttempt(attemptId, tx = null) {
+  const client = tx || prisma;
+  
+  try {
+    const attempt = await client.attempt.findUnique({
+      where: { id: attemptId },
+      include: {
+        exam: {
+          include: {
+            questions: {
+              include: {
+                question: true
+              }
+            }
+          }
+        },
+        answers: {
+          include: {
+            question: true
+          }
+        }
+      }
+    });
+
+    if (!attempt) {
+      console.error(`[Grading Engine] Attempt ${attemptId} not found`);
+      return null;
+    }
+
+    let totalMarks = 0;
+    let hasSubjective = false;
+
+    const gradingOperations = attempt.exam.questions.map((eq) => {
+      const answer = attempt.answers.find((a) => a.questionId === eq.questionId);
+      if (!answer) return null;
+
+      const isMcq = eq.question.type !== "SUBJECTIVE";
+      if (isMcq) {
+        const studentResponseIds = answer.selectedOptions || [];
+        
+        let originalOptions = [];
+        try {
+            if (eq.optionsSnapshot) originalOptions = JSON.parse(eq.optionsSnapshot);
+        } catch(e) {}
+        
+        const studentResponseLabels = studentResponseIds.map(idOrLabel => {
+            const opt = originalOptions.find(o => o.id === idOrLabel || o.label === idOrLabel);
+            return opt ? opt.label : idOrLabel;
+        });
+
+        const studentResponse = studentResponseLabels.sort();
+        const correctResponse = (eq.correctAnswersSnapshot || []).sort();
+        
+        const isCorrect = JSON.stringify(studentResponse) === JSON.stringify(correctResponse);
+        const marks = isCorrect ? eq.marks : 0;
+        
+        totalMarks += marks;
+
+        return client.answer.update({
+          where: { id: answer.id },
+          data: {
+            marksObtained: marks,
+            isCorrect: isCorrect
+          }
+        });
+      } else {
+        hasSubjective = true;
+        return null;
+      }
+    }).filter(Boolean);
+
+    // Run answer updates
+    if (gradingOperations.length > 0) {
+       // If we're already in a transaction (tx is provided), we can't use $transaction on it easily.
+       // We just wait for all of them.
+       await Promise.all(gradingOperations);
+    }
+
+    // Recalculate totals safely
+    const examTotal = attempt.exam.totalMarks || 1; // prevent div by zero
+    const percentage = (totalMarks / examTotal) * 100;
+    const isPassed = attempt.exam.passingMarks ? totalMarks >= attempt.exam.passingMarks : percentage >= 40;
+
+    // Map to 4.0 scale
+    let gradePoint = 0.0;
+    if (percentage >= 90) gradePoint = 4.0;
+    else if (percentage >= 80) gradePoint = 3.0;
+    else if (percentage >= 70) gradePoint = 2.0;
+    else if (percentage >= 60) gradePoint = 1.0;
+
+    // Create Result row
+    return client.result.upsert({
+      where: { attemptId },
+      update: {
+        totalMarksObtained: totalMarks,
+        percentage,
+        isPassed,
+        gradePoint,
+        gradingStatus: hasSubjective ? "MANUAL_REVIEW_PENDING" : "AUTO_GRADED"
+      },
+      create: {
+        attemptId,
+        studentId: attempt.userId,
+        examId: attempt.examId,
+        totalMarksObtained: totalMarks,
+        percentage,
+        isPassed,
+        gradePoint,
+        gradingStatus: hasSubjective ? "MANUAL_REVIEW_PENDING" : "AUTO_GRADED"
+      }
+    });
+  } catch (err) {
+    console.error(`[Grading Engine] Error grading attempt ${attemptId}:`, err);
+    throw err; // Re-throw to inform the caller
+  }
+}
+
+export async function recalculateExamResults(teacherId, examId) {
+  const exam = await prisma.exam.findUnique({
+    where: { id: examId },
+    select: { creatorId: true }
+  });
+
+  if (!exam || exam.creatorId !== teacherId) throw new Error("Unauthorized");
+
+  const attempts = await prisma.attempt.findMany({
+    where: {
+      examId,
+      status: { in: ['SUBMITTED', 'TIMED_OUT', 'CHEATED'] }
+    },
+    select: { id: true }
+  });
+
+  // Process all through auto-grading engine
+  for (const attempt of attempts) {
+    await autoGradeAttempt(attempt.id);
+  }
+
+  return { success: true, count: attempts.length };
 }
 
 export async function getStudentResultSummary(studentId) {

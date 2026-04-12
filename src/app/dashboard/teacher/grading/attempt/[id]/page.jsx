@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/componen
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { CheckCircle2, XCircle, AlertCircle, Save, ArrowLeft, User, Book } from "lucide-react";
+import { CheckCircle2, XCircle, AlertCircle, Save, ArrowLeft, User, Book, Clock } from "lucide-react";
+import { toast } from "sonner";
 
 export default function AttemptGrader() {
   const { id } = useParams();
@@ -53,12 +54,12 @@ export default function AttemptGrader() {
       });
       const data = await res.json();
       if (data.success) {
-        alert("Grade saved successfully");
+        toast.success("Grade saved successfully");
       } else {
-        alert("Error: " + data.message);
+        toast.error("Error: " + data.message);
       }
     } catch (e) {
-      alert("Error saving grade");
+      toast.error("Error saving grade");
     }
     setSaving(false);
   };
@@ -83,13 +84,21 @@ export default function AttemptGrader() {
         </div>
       </div>
 
-      <header className="bg-secondary/30 p-6 rounded-lg border">
-         <h1 className="text-2xl font-bold">{attempt.exam.title}</h1>
-         <div className="flex gap-4 mt-2 text-sm text-muted-foreground">
-             <span className="flex items-center"><Book className="w-4 h-4 mr-1"/> Semester {attempt.exam.semester}</span>
-             <span className="flex items-center"><Clock className="w-4 h-4 mr-1"/> Duration: {attempt.exam.duration} mins</span>
-             <span className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-1"/> Total Marks: {attempt.exam.totalMarks}</span>
+      <header className="bg-secondary/30 p-6 rounded-lg border flex flex-col md:flex-row md:items-center justify-between gap-4">
+         <div>
+            <h1 className="text-2xl font-bold">{attempt.exam.title}</h1>
+            <div className="flex flex-wrap gap-4 mt-2 text-sm text-muted-foreground">
+                <span className="flex items-center"><Book className="w-4 h-4 mr-1"/> Semester {attempt.exam.semester}</span>
+                <span className="flex items-center"><Clock className="w-4 h-4 mr-1"/> Duration: {attempt.exam.duration} mins</span>
+                <span className="flex items-center"><CheckCircle2 className="w-4 h-4 mr-1"/> Total Marks: {attempt.exam.totalMarks}</span>
+            </div>
          </div>
+         {attempt.result && (
+            <div className="text-right">
+               <div className="text-3xl font-black text-indigo-600">{attempt.result.totalMarksObtained} <span className="text-sm text-muted-foreground font-normal">/ {attempt.exam.totalMarks}</span></div>
+               <div className="text-[10px] uppercase font-bold tracking-widest opacity-40">Final Score</div>
+            </div>
+         )}
       </header>
 
       <div className="space-y-6">
@@ -116,18 +125,35 @@ export default function AttemptGrader() {
                 
                 {isMcq ? (
                   <div className="mt-2 space-y-2">
-                    {/* Render MCQs with color coding */}
-                    <div className="flex items-center gap-2 text-sm">
-                       {answer?.isCorrect ? (
-                         <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-                       ) : (
-                         <XCircle className="w-4 h-4 text-red-500" />
-                       )}
-                       <span>Selected Options: <strong>{answer?.selectedOptions.join(", ") || "No response"}</strong></span>
-                    </div>
-                    {!answer?.isCorrect && (
-                       <p className="text-xs text-muted-foreground ml-6 italic">Correct Answers: {eq.correctAnswersSnapshot.join(", ")}</p>
-                    )}
+                      {(() => {
+                        const originalOptions = eq.optionsSnapshot ? JSON.parse(eq.optionsSnapshot) : (eq.question?.options || []);
+                        const getDisplay = (val) => {
+                          const opt = originalOptions.find(o => o.id === val || o.label === val);
+                          return opt ? `[${opt.label}] ${opt.text}` : val;
+                        };
+
+                        return (
+                          <>
+                            <div className="flex items-center gap-2 text-sm">
+                              {answer?.isCorrect ? (
+                                <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                              ) : (
+                                <XCircle className="w-4 h-4 text-red-500" />
+                              )}
+                              <span>Selected Options: <strong>{
+                                answer?.selectedOptions?.map(getDisplay).join(", ") || "No response"
+                              }</strong></span>
+                            </div>
+                            {!answer?.isCorrect && (
+                              <p className="text-xs text-muted-foreground ml-6 italic">
+                                Correct Answers: {
+                                  eq.correctAnswersSnapshot?.map(getDisplay).join(", ") || "None"
+                                }
+                              </p>
+                            )}
+                          </>
+                        );
+                      })()}
                   </div>
                 ) : (
                   <div className="mt-2 p-4 bg-white border rounded text-sm italic whitespace-pre-wrap">

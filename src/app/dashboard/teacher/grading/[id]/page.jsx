@@ -5,22 +5,44 @@ import { useParams } from "next/navigation";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChevronLeft, User, Mail, Calendar, CheckCircle, Clock } from "lucide-react";
+import { ChevronLeft, User, Mail, Calendar, CheckCircle, Clock, RotateCw, RefreshCw } from "lucide-react";
 import Link from "next/link";
+import { toast } from "sonner";
 
 export default function ExamAttemptsList() {
   const { id } = useParams();
   const [attempts, setAttempts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+
+  async function loadData() {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/grading/pending?examId=${id}`);
+      const data = await res.json();
+      if (data.success) setAttempts(data.attempts);
+    } catch (e) { toast.error("Failed to load attempts"); }
+    setLoading(false);
+  }
 
   useEffect(() => {
-    fetch(`/api/grading/pending?examId=${id}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) setAttempts(data.attempts);
-        setLoading(false);
-      });
+    loadData();
   }, [id]);
+
+  async function handleSync() {
+    setSyncing(true);
+    try {
+      const res = await fetch(`/api/org/exams/${id}/sync`, { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(`Recovered ${data.count} student results!`);
+        loadData();
+      } else {
+        toast.error("Sync failed: " + data.message);
+      }
+    } catch (e) { toast.error("Sync error occurred"); }
+    setSyncing(false);
+  }
 
   if (loading) return <div className="p-12 text-center text-muted-foreground">Loading attempts...</div>;
 
@@ -33,8 +55,18 @@ export default function ExamAttemptsList() {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle>Total Submissions: {attempts.length}</CardTitle>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleSync} 
+            disabled={syncing}
+            className="rounded-xl font-bold bg-indigo-50 border-indigo-100 text-indigo-700 hover:bg-indigo-100 flex gap-2"
+          >
+            {syncing ? <RotateCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Sync & Recover Results
+          </Button>
         </CardHeader>
         <CardContent>
           <Table>

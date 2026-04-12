@@ -1,8 +1,8 @@
 import { getStudentResultSummary, calculateSemesterGPA } from "@/lib/services/grading.service.js";
 import { cookies } from "next/headers";
 
-function extractUserId() {
-  const cookieStore = cookies();
+async function extractUserId() {
+  const cookieStore = await cookies();
   const token = cookieStore.get("testify-token")?.value;
   if (!token) return null;
   try {
@@ -13,7 +13,7 @@ function extractUserId() {
 
 export async function GET(req) {
   try {
-    const studentId = extractUserId();
+    const studentId = await extractUserId();
     if (!studentId) return Response.json({ success: false, message: "Unauthorized" }, { status: 401 });
 
     const { searchParams } = new URL(req.url);

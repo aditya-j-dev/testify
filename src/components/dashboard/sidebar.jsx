@@ -98,19 +98,14 @@ export default function Sidebar() {
         )}
 
         {user?.role === "STUDENT" && (
-          <div className="pt-4">
-            <h3 className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2">Student Portal</h3>
+          <div className="pt-4 space-y-1">
+            <h3 className="px-3 text-xs font-black text-muted-foreground uppercase tracking-widest mb-2 opacity-50">Student Portal</h3>
             <Link
-              href="/dashboard/student/take-exam"
-              className="flex items-center px-3 py-2 text-sm rounded-md hover:bg-accent text-foreground"
+              href="/dashboard/student/exams"
+              className="flex items-center px-4 py-2.5 text-sm font-bold rounded-xl hover:bg-emerald-50 hover:text-emerald-700 transition-all group"
             >
-              Active Exams
-            </Link>
-            <Link
-              href="/dashboard/student/results"
-              className="flex items-center px-3 py-2 text-sm rounded-md hover:bg-accent text-foreground"
-            >
-              My Results
+              <ClipboardList className="w-4 h-4 mr-2.5 text-emerald-500 group-hover:text-emerald-600 transition-colors" /> 
+              My Assessments
             </Link>
           </div>
         )}

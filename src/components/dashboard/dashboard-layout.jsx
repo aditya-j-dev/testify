@@ -3,8 +3,21 @@
 import ProtectedRoute from "@/components/auth/protected-route";
 import Sidebar from "./sidebar";
 import Header from "./header";
+import { usePathname } from "next/navigation";
 
 export default function DashboardLayout({ children }) {
+  const pathname = usePathname();
+  const isActiveExam = pathname?.endsWith("/active");
+
+  if (isActiveExam) {
+     return (
+       <ProtectedRoute>
+          <div className="min-h-screen bg-slate-50">
+             {children}
+          </div>
+       </ProtectedRoute>
+     );
+  }
 
   return (
     <ProtectedRoute>

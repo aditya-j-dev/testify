@@ -1,8 +1,8 @@
 import { gradeSubjectiveAnswer } from "@/lib/services/grading.service.js";
 import { cookies } from "next/headers";
 
-function extractUserId() {
-  const cookieStore = cookies();
+async function extractUserId() {
+  const cookieStore = await cookies();
   const token = cookieStore.get("testify-token")?.value;
   if (!token) return null;
   try {
@@ -12,7 +12,7 @@ function extractUserId() {
 
 export async function POST(req) {
   try {
-    const teacherId = extractUserId();
+    const teacherId = await extractUserId();
     if (!teacherId) return Response.json({ success: false, message: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();

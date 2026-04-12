@@ -43,20 +43,30 @@ export default function GradingDashboard() {
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-primary uppercase tracking-wider">{exam.subject}</span>
-                  <div className="flex items-center text-amber-500 text-xs font-bold">
-                    <Clock className="w-3 h-3 mr-1" />
-                    {exam.pendingCount} Pending
-                  </div>
+                  {exam.pendingCount > 0 && (
+                    <div className="flex items-center text-amber-500 text-[10px] font-black uppercase">
+                      <Clock className="w-3 h-3 mr-1" />
+                      {exam.pendingCount} Review Required
+                    </div>
+                  )}
                 </div>
                 <CardTitle className="text-lg mt-1">{exam.title}</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-xs text-muted-foreground mb-4">
-                  Last submission: {new Date(exam.updatedAt).toLocaleDateString()}
-                </p>
+                <div className="flex justify-between items-center mb-4">
+                  <div className="flex flex-col">
+                    <span className="text-2xl font-black">{exam.totalCount}</span>
+                    <span className="text-[10px] uppercase font-bold opacity-40">Total Submissions</span>
+                  </div>
+                  {exam.completedCount > 0 && (
+                     <div className="text-right">
+                        <span className="text-xs font-bold text-emerald-600">{exam.completedCount} Graded</span>
+                     </div>
+                  )}
+                </div>
                 <Link href={`/dashboard/teacher/grading/${exam.id}`}>
-                  <Button className="w-full justify-between" variant="outline">
-                    View Submissions
+                  <Button className="w-full justify-between h-11 rounded-xl font-bold" variant="outline">
+                    View Results
                     <ChevronRight className="w-4 h-4 ml-2" />
                   </Button>
                 </Link>

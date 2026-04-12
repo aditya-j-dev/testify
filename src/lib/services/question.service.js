@@ -30,7 +30,7 @@ export async function createQuestion({
 
     if (options && options.length > 0) {
       await tx.questionOption.createMany({
-        data: options.map((opt) => ({
+        data: options.map(({ id: _, ...opt }) => ({
           ...opt,
           questionId: question.id,
         }))
@@ -64,58 +64,103 @@ export async function getQuestionsByCollege(collegeId, filters = {}) {
     },
     include: { 
       options: { orderBy: { order: 'asc' } },
-      subject: { select: { name: true } }
+      subject: { select: { name: true } },
+      exams: {
+         include: {
+            exam: { select: { title: true } }
+         }
+      }
     },
     orderBy: { createdAt: 'desc' }
   });
 }
 
 export async function deleteQuestion(id, userId) {
-  const question = await prisma.question.findUnique({ where: { id } });
+  const question = await prisma.question.findUnique({ 
+    where: { id },
+    include: { exams: { include: { exam: { select: { status: true } } } } }
+  });
+
   if (!question) throw new Error("Question not found");
   if (question.creatorId !== userId) throw new Error("Unauthorized: You do not own this question");
+
+  const isLocked = question.exams.some(eq => eq.exam.status === 'ACTIVE' || eq.exam.status === 'COMPLETED');
+  if (isLocked) {
+    throw new Error("Cannot delete a question used in an active or completed assessment.");
+  }
 
   return prisma.question.delete({
     where: { id }
   });
 }
 
-export async function updateQuestion(id, userId, data) {
+export async function updateQuestion(id, userId, data, examId = null) {
   const questionRecord = await prisma.question.findUnique({ 
     where: { id },
-    include: { exams: { include: { exam: { select: { status: true } } } } }
+    include: { 
+      exams: { include: { exam: { select: { status: true } } } },
+      options: true
+    }
   });
 
   if (!questionRecord) throw new Error("Question not found");
-  if (questionRecord.creatorId !== userId) throw new Error("Unauthorized: You do not own this question");
 
+  const isOwner = questionRecord.creatorId === userId;
   const isLocked = questionRecord.exams.some(eq => eq.exam.status === 'ACTIVE' || eq.exam.status === 'COMPLETED');
-  
-  if (isLocked) {
-     return createQuestion({
-        ...data,
+
+  // FORK path: clone when the question is locked (live exam) OR when the editor is not the original author.
+  // Cloning is always non-destructive — the original is never mutated.
+  if (isLocked || !isOwner) {
+     const mergedData = {
+        text: data.text !== undefined ? data.text : questionRecord.text,
+        type: data.type || questionRecord.type,
+        modelAnswer: data.modelAnswer !== undefined ? data.modelAnswer : questionRecord.modelAnswer,
+        defaultMarks: data.defaultMarks !== undefined ? data.defaultMarks : questionRecord.defaultMarks,
+        options: data.options || questionRecord.options.map(o => ({
+           text: o.text,
+           label: o.label,
+           isCorrect: o.isCorrect,
+           order: o.order
+        })),
         subjectId: questionRecord.subjectId,
         collegeId: questionRecord.collegeId,
-        creatorId: userId,
-        type: questionRecord.type
+        creatorId: userId // clone is owned by the editing teacher
+     };
+
+     return prisma.$transaction(async (tx) => {
+        // 1. Create the fork (clone with edits applied)
+        const newQuestion = await createQuestion(mergedData);
+
+        // 2. Hot-Swap: redirect the exam's question link to the new fork instantly
+        if (examId) {
+           await tx.examQuestion.updateMany({
+              where: { examId, questionId: id },
+              data: { questionId: newQuestion.id }
+           });
+        }
+
+        return newQuestion;
      });
   }
 
-  const { options, ...questionData } = data;
+  // --- Normal Path (Non-Locked) ---
+  const { options, text, type, modelAnswer, defaultMarks } = data;
 
   return prisma.$transaction(async (tx) => {
     await tx.question.update({
       where: { id },
       data: {
-        ...questionData,
-        defaultMarks: questionData.defaultMarks ? parseInt(questionData.defaultMarks, 10) : undefined,
+        text,
+        type: type ? type.toUpperCase() : undefined,
+        modelAnswer,
+        defaultMarks: defaultMarks ? parseInt(defaultMarks, 10) : undefined,
       }
     });
 
     if (options) {
       await tx.questionOption.deleteMany({ where: { questionId: id } });
       await tx.questionOption.createMany({
-        data: options.map((opt) => ({
+        data: options.map(({ id: _, ...opt }) => ({
           ...opt,
           questionId: id,
         }))

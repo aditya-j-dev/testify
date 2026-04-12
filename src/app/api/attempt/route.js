@@ -1,8 +1,8 @@
 import { startAttempt, submitAttempt } from "@/lib/services/attempt.service.js";
 import { cookies } from "next/headers";
 
-function extractUserId() {
-  const cookieStore = cookies();
+async function extractUserId() {
+  const cookieStore = await cookies();
   const token = cookieStore.get("testify-token")?.value;
   if (!token) return null;
   try {
@@ -12,7 +12,7 @@ function extractUserId() {
 
 export async function POST(req) {
   try {
-    const studentId = extractUserId();
+    const studentId = await extractUserId();
     if (!studentId) return Response.json({ success: false, message: "Unauthorized" }, { status: 401 });
 
     const body = await req.json();

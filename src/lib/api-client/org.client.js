@@ -201,6 +201,18 @@ export const orgClient = {
     async start(id) {
        const res = await fetch(`/api/org/exams/${id}/start`, { method: "POST" });
        return res.json();
+    },
+    async complete(id) {
+       const res = await fetch(`/api/org/exams/${id}/complete`, { method: "POST" });
+       return res.json();
+    },
+    async reorderQuestions(id, orderedIds) {
+       const res = await fetch(`/api/org/exams/${id}/questions`, {
+         method: "PATCH",
+         headers: { "Content-Type": "application/json" },
+         body: JSON.stringify({ orderedIds }),
+       });
+       return res.json();
     }
   }
 };

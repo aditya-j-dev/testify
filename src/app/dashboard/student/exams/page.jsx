@@ -27,10 +27,36 @@ export default function StudentExamsPage() {
     setLoading(false);
   }
 
-  if (loading) return <div className="p-20 text-center animate-pulse text-muted-foreground font-black uppercase tracking-widest italic">Synchronizing Student Registry...</div>;
+  const formatDateTime = (date) => {
+     if (!date) return "";
+     return new Date(date).toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+     });
+  };
 
-  const activeExams = exams.filter(e => e.status === 'ACTIVE' && (!e.attempts[0] || e.attempts[0].status === 'IN_PROGRESS'));
-  const pastExams = exams.filter(e => e.attempts[0]?.status === 'COMPLETED');
+  const now = new Date();
+  
+  const activeExams = exams.filter(e => {
+    const isActuallyActive = e.status === 'ACTIVE';
+    const isInWindow = e.status === 'PUBLISHED' && e.startTime && new Date(e.startTime) <= now && (!e.endTime || new Date(e.endTime) >= now);
+    const isWithinTime = !e.endTime || new Date(e.endTime) >= now;
+    const notCompleted = !e.attempts[0] || e.attempts[0].status === 'IN_PROGRESS';
+    return (isActuallyActive || isInWindow) && isWithinTime && notCompleted;
+  });
+
+  const upcomingExams = exams.filter(e => 
+    e.status === 'PUBLISHED' && e.startTime && new Date(e.startTime) > now
+  );
+
+  const pastExams = exams.filter(e => {
+    const isCompletedStatus = e.status === 'COMPLETED';
+    const isPastWindow = e.endTime && new Date(e.endTime) < now;
+    const hasFinishedAttempt = e.attempts[0]?.status === 'SUBMITTED' || e.attempts[0]?.status === 'TIMED_OUT' || e.attempts[0]?.status === 'COMPLETED' || e.attempts[0]?.status === 'CHEATED';
+    return isCompletedStatus || isPastWindow || hasFinishedAttempt;
+  });
 
   return (
     <div className="space-y-10 container mx-auto pb-20 mt-8 px-4">
@@ -94,6 +120,31 @@ export default function StudentExamsPage() {
         )}
       </section>
 
+      {/* Upcoming Section */}
+      {upcomingExams.length > 0 && (
+        <section className="space-y-6">
+          <div className="flex items-center gap-3 px-2">
+             <Calendar className="w-6 h-6 text-indigo-500" />
+             <h2 className="text-sm font-black uppercase tracking-[0.2em] text-slate-800 dark:text-slate-200">Upcoming Assessments</h2>
+          </div>
+          <div className="grid md:grid-cols-3 gap-6">
+            {upcomingExams.map(exam => (
+              <Card key={exam.id} className="p-6 rounded-[32px] border border-muted/10 bg-white dark:bg-slate-900 shadow-sm hover:shadow-xl transition-all border-b-4 border-b-indigo-50">
+                <div className="flex justify-between items-start mb-4">
+                   <Badge variant="outline" className="text-[9px] font-black uppercase tracking-widest bg-slate-50">{exam.subject?.name}</Badge>
+                   <div className="text-[10px] font-black text-indigo-500 uppercase">Starts {formatDateTime(exam.startTime)}</div>
+                </div>
+                <h4 className="text-lg font-black text-slate-800 dark:text-white leading-tight mb-4">{exam.title}</h4>
+                <div className="flex items-center gap-4 text-[10px] font-bold text-muted-foreground uppercase opacity-60">
+                   <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> {exam.duration}m</span>
+                   <span className="flex items-center gap-1"><FileText className="w-3.5 h-3.5" /> {exam.totalMarks} Pts</span>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* History Section */}
       <section className="space-y-6">
         <div className="flex items-center gap-3 px-2 opacity-50">
@@ -102,16 +153,34 @@ export default function StudentExamsPage() {
         </div>
 
         <div className="grid md:grid-cols-3 gap-6">
-           {pastExams.map(exam => (
-             <Card key={exam.id} className="p-6 rounded-[28px] border border-muted/10 bg-slate-50/30 opacity-70 hover:opacity-100 transition-all">
-                <Badge variant="secondary" className="mb-3 text-[9px] font-black opacity-50 uppercase">{exam.subject?.name}</Badge>
-                <h4 className="font-bold text-slate-800 dark:text-white leading-tight">{exam.title}</h4>
-                <div className="mt-4 flex items-center justify-between">
-                   <div className="text-[10px] font-black uppercase text-muted-foreground/60">Finalized</div>
-                   <Badge className="bg-slate-200 text-slate-600 font-black border-none text-[9px]">COMPLETED</Badge>
-                </div>
-             </Card>
-           ))}
+           {pastExams.map(exam => {
+             const attempt = exam.attempts[0];
+             const isAttempted = !!attempt && (attempt.status === 'SUBMITTED' || attempt.status === 'TIMED_OUT' || attempt.status === 'COMPLETED' || attempt.status === 'CHEATED');
+             const isCheatedAttempt = attempt?.status === 'CHEATED';
+             const isMissed = !isAttempted && new Date(exam.endTime) < now;
+
+             return (
+              <Card key={exam.id} className={`p-6 rounded-[28px] border border-muted/10 transition-all ${isAttempted ? 'bg-white shadow-sm' : 'bg-slate-50/50 opacity-70'}`}>
+                 <div className="flex justify-between items-start mb-3">
+                    <Badge variant="secondary" className="text-[9px] font-black opacity-50 uppercase">{exam.subject?.name}</Badge>
+                    {isCheatedAttempt ? (
+                       <Badge className="bg-rose-600 text-white border-none font-black text-[8px] uppercase tracking-wider animate-pulse">Cheated</Badge>
+                    ) : isAttempted ? (
+                       <Badge className="bg-emerald-100 text-emerald-700 border-none font-black text-[8px] uppercase tracking-wider">Attempted</Badge>
+                    ) : (
+                       <Badge className="bg-rose-100 text-rose-700 border-none font-black text-[8px] uppercase tracking-wider">Not Attempted</Badge>
+                    )}
+                 </div>
+                 <h4 className="font-black text-slate-800 dark:text-white leading-tight">{exam.title}</h4>
+                 <div className="mt-4 flex items-center justify-between border-t border-muted/5 pt-4">
+                    <div className="text-[9px] font-black uppercase text-muted-foreground/40 italic">
+                       {isCheatedAttempt ? 'Terminated for Breach' : isAttempted ? `Result: ${attempt.status}` : 'Window Closed'}
+                    </div>
+                    <Badge variant="outline" className={`font-black border-muted/10 text-[9px] uppercase ${isCheatedAttempt ? 'text-rose-600 border-rose-100' : ''}`}>{isCheatedAttempt ? 'Violation' : exam.status}</Badge>
+                 </div>
+              </Card>
+             );
+           })}
         </div>
       </section>
     </div>
