@@ -15,7 +15,7 @@ export async function POST(req, { params }) {
     const studentId = await extractUserId();
     if (!studentId) return Response.json({ success: false, message: "Unauthorized" }, { status: 401 });
 
-    const attemptId = params.id;
+    const { id: attemptId } = await params;
     const body = await req.json();
     
     if (!body.event) return Response.json({ success: false, message: "Event required" }, { status: 400 });

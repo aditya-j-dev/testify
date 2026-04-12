@@ -17,7 +17,8 @@ import {
   ChevronRight,
   BookOpen,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  StopCircle
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -107,16 +108,49 @@ export default function FacultyExamsPage() {
     } catch (e) { toast.error("Deletion failed"); }
   }
 
+  async function handleComplete(id) {
+    if (!confirm("Stop this active assessment immediately? All student work will be saved and sessions closed.")) return;
+    try {
+        const res = await orgClient.exams.complete(id);
+        if (res.success) {
+           toast.success("Exam terminated successfully");
+           loadInitialData();
+        } else {
+           toast.error(res.message);
+        }
+    } catch (e) { toast.error("Termination failed"); }
+  }
+
   const filteredExams = (exams || []).filter(ex => 
     ex.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const getStatusColor = (status) => {
+  const formatDateTime = (date) => {
+    if (!date) return null;
+    return new Date(date).toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getStatusColor = (status, startTime, endTime) => {
+    const now = new Date();
+    
+    // Auto-complete if endTime is passed
+    if ((status === 'ACTIVE' || status === 'PUBLISHED') && endTime && new Date(endTime) < now) {
+      return 'bg-slate-100 text-slate-500 border-slate-200';
+    }
+
+    if (status === 'PUBLISHED' && startTime && new Date(startTime) > now) {
+      return 'bg-amber-50 text-amber-600 border-amber-200';
+    }
     switch (status) {
       case 'DRAFT': return 'bg-slate-100 text-slate-600 border-slate-200';
       case 'PUBLISHED': return 'bg-indigo-50 text-indigo-700 border-indigo-100';
-      case 'LIVE': return 'bg-emerald-50 text-emerald-700 border-emerald-100 animate-pulse';
-      case 'COMPLETED': return 'bg-amber-50 text-amber-700 border-amber-100';
+      case 'ACTIVE': return 'bg-emerald-100 text-emerald-800 border-emerald-200 animate-pulse';
+      case 'COMPLETED': return 'bg-slate-100 text-slate-500 border-slate-200';
       default: return 'bg-muted text-muted-foreground';
     }
   };
@@ -278,8 +312,9 @@ export default function FacultyExamsPage() {
                <div className="p-1.5 flex flex-col h-full">
                   <div className="p-6 pb-4 space-y-4 flex-1">
                      <div className="flex items-center justify-between">
-                        <Badge variant="outline" className={`font-black tracking-widest uppercase text-[10px] py-1 border-opacity-50 ${getStatusColor(ex.status)}`}>
-                           {ex.status}
+                        <Badge variant="outline" className={`font-black tracking-widest uppercase text-[10px] py-1 border-opacity-50 ${getStatusColor(ex.status, ex.startTime, ex.endTime)}`}>
+                           {ex.endTime && new Date(ex.endTime) < new Date() && (ex.status === 'ACTIVE' || ex.status === 'PUBLISHED') ? 'COMPLETED' : 
+                            (ex.status === 'PUBLISHED' && ex.startTime && new Date(ex.startTime) > new Date() ? 'SCHEDULED' : ex.status)}
                         </Badge>
                         <div className="flex items-center gap-1.5 text-muted-foreground text-[10px] font-black uppercase tracking-tighter">
                            <Clock className="w-3.5 h-3.5" />
@@ -303,6 +338,26 @@ export default function FacultyExamsPage() {
                            <span>Sem {ex.semester}</span>
                         </div>
                      </div>
+
+                     {(ex.startTime || ex.endTime) && (
+                        <div className="pt-4 space-y-2 border-t border-muted/5">
+                           <div className="text-[9px] font-black uppercase text-muted-foreground/40 tracking-widest">Schedule Window</div>
+                           <div className="grid grid-cols-2 gap-2">
+                              {ex.startTime && (
+                                 <div className="flex flex-col">
+                                    <span className="text-[8px] font-bold text-muted-foreground/60 uppercase">Starts</span>
+                                    <span className="text-[10px] font-black">{formatDateTime(ex.startTime)}</span>
+                                 </div>
+                              )}
+                              {ex.endTime && (
+                                 <div className="flex flex-col">
+                                    <span className="text-[8px] font-bold text-muted-foreground/60 uppercase">Ends</span>
+                                    <span className="text-[10px] font-black">{formatDateTime(ex.endTime)}</span>
+                                 </div>
+                              )}
+                           </div>
+                        </div>
+                     )}
                   </div>
 
                   <div className="mt-auto px-6 py-4 flex items-center justify-between border-t border-dashed bg-muted/5 group-hover:bg-indigo-50/10 transition-colors">
@@ -316,9 +371,22 @@ export default function FacultyExamsPage() {
                      </div>
                      
                      <div className="flex items-center gap-1">
+                        {(ex.status === 'COMPLETED' || (ex.endTime && new Date(ex.endTime) < new Date())) && (
+                           <Link href={`/dashboard/teacher/grading/${ex.id}`}>
+                              <Button variant="outline" size="sm" className="h-9 px-4 rounded-xl border-dashed border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-black uppercase text-[9px] flex gap-2">
+                                 <ClipboardList className="w-3.5 h-3.5" />
+                                 Results
+                              </Button>
+                           </Link>
+                        )}
                         {ex.status === 'DRAFT' && (
                            <Button variant="ghost" size="icon" onClick={() => handleDelete(ex.id)} className="h-9 w-9 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-colors rounded-full">
                               <Trash2 className="w-4 h-4" />
+                           </Button>
+                        )}
+                        {ex.status === 'ACTIVE' && (!ex.endTime || new Date(ex.endTime) > new Date()) && (
+                           <Button variant="ghost" size="icon" onClick={() => handleComplete(ex.id)} className="h-9 w-9 text-rose-500 hover:bg-rose-50 transition-colors rounded-full">
+                              <StopCircle className="w-5 h-5" />
                            </Button>
                         )}
                         <Link href={`/dashboard/teacher/exams/${ex.id}`}>

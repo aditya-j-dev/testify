@@ -41,3 +41,18 @@ export async function DELETE(req, { params }) {
     return Response.json({ success: false, message: error.message }, { status: 400 });
   }
 }
+
+export async function PATCH(req, { params }) {
+  try {
+    const auth = await getAuthContext();
+    if (!auth) return Response.json({ success: false, message: "Unauthorized" }, { status: 401 });
+
+    const { id } = await params;
+    const { orderedIds } = await req.json();
+
+    await reorderExamQuestions(auth.userId, id, orderedIds);
+    return Response.json({ success: true, message: "Structure synchronized" });
+  } catch (error) {
+    return Response.json({ success: false, message: error.message }, { status: 400 });
+  }
+}
