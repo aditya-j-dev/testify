@@ -1,5 +1,6 @@
 import prisma from "../prisma.js";
 import { autoGradeAttempt } from "./grading.service.js";
+import { checkResourceLimit } from "./subscription.service.js";
 
 // --- Collision Detection ---
 async function checkSchedulingConflict(targetBatchId, targetStartTime, targetEndTime, currentExamId) {
@@ -35,6 +36,9 @@ export async function createDraftExam(teacherId, data) {
   if (!teacher || (teacher.role !== "TEACHER" && teacher.role !== "ADMIN")) {
     throw new Error("Forbidden: Only teachers can create exams");
   }
+
+  // Enforce plan limits
+  await checkResourceLimit(collegeId, "exams");
 
   return prisma.exam.create({
     data: {

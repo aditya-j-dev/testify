@@ -6,23 +6,22 @@ import Link from "next/link";
 import {
   ArrowRight,
   ArrowLeft,
-  Eye,
-  EyeOff,
   AlertCircle,
+  CheckCircle2,
   Loader2,
   Building2,
   UserCircle,
   ShieldCheck,
-  CheckCircle2,
+  Mail,
 } from "lucide-react";
 
+
+
 import { onboardCollegeClient } from "@/lib/api-client/onboarding.client";
-import { useAuth } from "@/context/auth-context";
 
 const STEPS = [
   { id: 1, label: "Institution", icon: Building2 },
   { id: 2, label: "Admin Details", icon: UserCircle },
-  { id: 3, label: "Set password", icon: ShieldCheck },
 ];
 
 const DESIGNATIONS = [
@@ -37,14 +36,14 @@ const DESIGNATIONS = [
 ];
 
 export function OnboardingForm() {
-  const { login } = useAuth();
   const router = useRouter();
 
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [submittedEmail, setSubmittedEmail] = useState("");
+  const [devSetupUrl, setDevSetupUrl] = useState("");
 
   const [form, setForm] = useState({
     collegeName: "",
@@ -53,8 +52,6 @@ export function OnboardingForm() {
     adminEmail: "",
     adminContact: "",
     adminDesignation: "",
-    adminPassword: "",
-    confirm: "",
   });
 
   function set(field, value) {
@@ -71,10 +68,6 @@ export function OnboardingForm() {
       if (!form.adminEmail.trim() || !form.adminEmail.includes("@")) { setError("A valid email address is required"); return false; }
       if (!form.adminContact.trim()) { setError("Contact number is required"); return false; }
       if (!form.adminDesignation) { setError("Please select your designation"); return false; }
-    }
-    if (step === 3) {
-      if (form.adminPassword.length < 8) { setError("Password must be at least 8 characters"); return false; }
-      if (form.adminPassword !== form.confirm) { setError("Passwords do not match"); return false; }
     }
     return true;
   }
@@ -97,20 +90,18 @@ export function OnboardingForm() {
     setError("");
 
     try {
-      const user = await onboardCollegeClient({
+      await onboardCollegeClient({
         collegeName: form.collegeName,
         address: form.address,
         adminName: form.adminName,
         adminEmail: form.adminEmail,
         adminContact: form.adminContact,
         adminDesignation: form.adminDesignation,
-        adminPassword: form.adminPassword,
       });
 
-      await login(user);
+      setSubmittedEmail(form.adminEmail);
+      if (result.setupUrl) setDevSetupUrl(result.setupUrl);
       setDone(true);
-
-      setTimeout(() => router.push("/dashboard"), 2000);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -118,28 +109,41 @@ export function OnboardingForm() {
     }
   }
 
-  /* ── Success state ────────────────────────────────────────────────── */
+  /* ── Success state ────────────────────────────────────────────────────── */
   if (done) {
     return (
       <div className="flex flex-col items-center text-center py-8 gap-6">
-        <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center">
-          <CheckCircle2 size={32} className="text-emerald-500" />
+        <div className="w-16 h-16 rounded-full bg-testify-accent/10 border border-testify-accent/30 flex items-center justify-center">
+          <Mail size={32} className="text-testify-accent" />
         </div>
         <div>
-          <h2 className="font-serif text-3xl text-testify-text mb-2">You're all set!</h2>
-          <p className="text-testify-muted text-base">
-            Your 3-day trial has started. Redirecting to your dashboard…
+          <h2 className="font-serif text-3xl text-testify-text mb-2">Check your inbox!</h2>
+          <p className="text-testify-muted text-base leading-relaxed">
+            We sent a setup link to{" "}
+            <strong className="text-testify-text">{submittedEmail}</strong>.<br />
+            Click the link in the email to set your password and access your dashboard.
           </p>
         </div>
-        <div className="flex gap-1">
-          {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              className="w-2 h-2 rounded-full bg-testify-accent animate-bounce"
-              style={{ animationDelay: `${i * 0.15}s` }}
-            />
-          ))}
+        <div className="flex items-start gap-3 p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 text-left max-w-sm">
+          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0 mt-1.5" />
+          <p className="text-xs text-amber-400/90 leading-relaxed">
+            <strong>3-day trial starts now.</strong> The setup link expires in 24 hours — check spam if you don't see it.
+          </p>
         </div>
+        {devSetupUrl && (
+          <div className="w-full p-4 rounded-xl bg-indigo-500/5 border border-indigo-500/20 text-left space-y-2">
+            <p className="text-xs text-indigo-400 font-semibold uppercase tracking-wider">🛠 Dev mode — direct setup link</p>
+            <p className="text-xs text-testify-muted leading-relaxed">
+              Email delivery requires a verified Resend domain in production. Use this link now:
+            </p>
+            <a
+              href={devSetupUrl}
+              className="block text-xs text-indigo-400 hover:text-indigo-300 underline break-all transition-colors"
+            >
+              {devSetupUrl}
+            </a>
+          </div>
+        )}
       </div>
     );
   }
@@ -197,10 +201,6 @@ export function OnboardingForm() {
           <h1 className="font-serif text-4xl text-testify-text mb-2 tracking-tight">About you</h1>
           <p className="text-testify-muted text-base">You'll be the admin of your institution's workspace.</p>
         </>}
-        {step === 3 && <>
-          <h1 className="font-serif text-4xl text-testify-text mb-2 tracking-tight">Secure your account</h1>
-          <p className="text-testify-muted text-base">Set a strong password to protect your admin account.</p>
-        </>}
       </div>
 
       {/* Error Banner */}
@@ -211,7 +211,7 @@ export function OnboardingForm() {
         </div>
       )}
 
-      <form onSubmit={step === 3 ? handleSubmit : (e) => { e.preventDefault(); next(); }} className="flex flex-col gap-5">
+      <form onSubmit={step === 2 ? handleSubmit : (e) => { e.preventDefault(); next(); }} className="flex flex-col gap-5">
 
         {/* ── Step 1: Institution ──────────────────────────────── */}
         {step === 1 && (
@@ -276,51 +276,16 @@ export function OnboardingForm() {
                 </select>
               </Field>
             </div>
-          </>
-        )}
-
-        {/* ── Step 3: Password ─────────────────────────────────── */}
-        {step === 3 && (
-          <>
-            <Field label="Create password *">
-              <div className="relative">
-                <input id="admin-password" type={showPassword ? "text" : "password"} autoComplete="new-password"
-                  placeholder="Min. 8 characters" required value={form.adminPassword}
-                  onChange={(e) => set("adminPassword", e.target.value)}
-                  className={`${inputClass} pr-12`} />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} tabIndex={-1}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-testify-muted2 hover:text-testify-text transition-colors"
-                  aria-label="Toggle password visibility">
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              </div>
-              {form.adminPassword.length > 0 && (
-                <div className="flex gap-1 mt-2">
-                  {[1, 2, 3, 4].map((lvl) => (
-                    <div key={lvl} className={`h-1 flex-1 rounded-full transition-colors duration-300 ${form.adminPassword.length >= lvl * 2 ? form.adminPassword.length >= 10 ? "bg-emerald-500" : "bg-testify-accent" : "bg-testify-surface2"}`} />
-                  ))}
-                </div>
-              )}
-            </Field>
-
-            <Field label="Confirm password *">
-              <input id="confirm-password" type="password" autoComplete="new-password" placeholder="Re-enter password"
-                required value={form.confirm} onChange={(e) => set("confirm", e.target.value)} className={inputClass} />
-              {form.confirm && form.confirm !== form.adminPassword && (
-                <p className="text-xs text-red-400 mt-1">Passwords don&apos;t match</p>
-              )}
-            </Field>
-
-            {/* Summary */}
-            <div className="p-4 rounded-xl bg-testify-surface border border-testify-border text-sm flex flex-col gap-2">
+            {/* ── Step 2 Summary / Submit preview ───────────────────── */}
+            <div className="p-4 rounded-xl bg-testify-surface border border-testify-border text-sm flex flex-col gap-2 mt-1">
               <p className="text-xs uppercase font-bold tracking-wider text-testify-muted2 mb-1">Account summary</p>
               <Row label="Institution" value={form.collegeName} />
               <Row label="Admin" value={form.adminName} />
               <Row label="Email" value={form.adminEmail} />
               <Row label="Role" value={form.adminDesignation} />
               <div className="pt-2 mt-1 border-t border-testify-border flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
-                <span className="text-xs text-amber-400 font-medium">3-day free trial starts on submission</span>
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                <span className="text-xs text-amber-400 font-medium">You'll receive a setup email to set your password</span>
               </div>
             </div>
           </>
@@ -338,10 +303,10 @@ export function OnboardingForm() {
             className="flex-1 h-12 rounded-xl bg-testify-accent hover:bg-testify-accent2 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
             {loading ? (
               <><Loader2 size={16} className="animate-spin" /> Registering…</>
-            ) : step < 3 ? (
+            ) : step < 2 ? (
               <>Continue <ArrowRight size={16} /></>
             ) : (
-              <>Start 3-day trial <ArrowRight size={16} /></>
+              <>Send setup email <ArrowRight size={16} /></>
             )}
           </button>
         </div>

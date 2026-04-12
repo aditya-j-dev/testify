@@ -1,4 +1,5 @@
 import prisma from "../prisma.js";
+import { checkResourceLimit } from "./subscription.service.js";
 
 // --- College ---
 export async function createCollege({ name, address }) {
@@ -65,6 +66,11 @@ export async function createUserForCollege(collegeId, { name, email, password, r
   const existingUser = await prisma.user.findUnique({ where: { email } });
   if (existingUser) throw new Error("User with this email already exists");
 
+  // Enforce plan limits for TEACHER and STUDENT roles
+  const normalizedRole = role.toUpperCase();
+  if (normalizedRole === "TEACHER") await checkResourceLimit(collegeId, "teachers");
+  if (normalizedRole === "STUDENT") await checkResourceLimit(collegeId, "students");
+
   const hashedPassword = await bcrypt.hash(password, 10);
   
   return prisma.user.create({
@@ -87,6 +93,9 @@ export async function createBranch({ name, collegeId }) {
   // Check if college exists
   const collegeExists = await prisma.college.findUnique({ where: { id: collegeId } });
   if (!collegeExists) throw new Error("Invalid collegeId block");
+
+  // Enforce plan limits
+  await checkResourceLimit(collegeId, "branches");
 
   // Ensure unique branch name per college
   const existingBranch = await prisma.branch.findUnique({
@@ -123,8 +132,11 @@ export async function createBatch({ name, graduationYear, branchId }) {
   }
 
   // Check if branch exists
-  const branchExists = await prisma.branch.findUnique({ where: { id: branchId } });
+  const branchExists = await prisma.branch.findUnique({ where: { id: branchId }, select: { id: true, collegeId: true } });
   if (!branchExists) throw new Error("Invalid branchId");
+
+  // Enforce plan limits (derive collegeId from branch)
+  await checkResourceLimit(branchExists.collegeId, "batches");
 
   // Ensure unique batch per branch
   const existingBatch = await prisma.batch.findUnique({

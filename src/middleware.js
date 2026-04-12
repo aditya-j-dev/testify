@@ -5,8 +5,8 @@ export function middleware(req) {
   const path = req.nextUrl.pathname;
 
   // --- Public Paths ---
-  if (path === "/login" || path === "/register") {
-    if (token) return NextResponse.redirect(new URL("/dashboard", req.url));
+  if (path === "/login" || path === "/register" || path.startsWith("/auth/")) {
+    if (token && !path.startsWith("/auth/")) return NextResponse.redirect(new URL("/dashboard", req.url));
     return NextResponse.next();
   }
 
@@ -79,6 +79,7 @@ export const config = {
   matcher: [
     "/dashboard/:path*",
     "/login",
-    "/register"
+    "/register",
+    "/auth/:path*",
   ],
 };

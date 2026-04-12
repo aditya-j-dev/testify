@@ -1,4 +1,4 @@
-import { saveAnswerSync } from "@/lib/services/attempt.service.js";
+import { syncAnswers } from "@/lib/services/attempt.service.js";
 import { cookies } from "next/headers";
 
 async function extractUserId() {
@@ -15,13 +15,14 @@ export async function PUT(req, { params }) {
     const studentId = await extractUserId();
     if (!studentId) return Response.json({ success: false, message: "Unauthorized" }, { status: 401 });
 
-    const attemptId = params.id;
+    const { id: attemptId } = await params;
     const body = await req.json();
     
-    // Body needs: questionId, selectedOptions (array), subjectiveText, clientSavedAt
-    const answer = await saveAnswerSync(studentId, attemptId, body);
+    // Body: { questionId, selectedOptions (array), subjectiveText, clientSavedAt }
+    const answer = await syncAnswers(studentId, attemptId, [body]);
     
     return Response.json({ success: true, answer }, { status: 200 });
+
   } catch (error) {
     // Return 409 Conflict if anti-cheat triggers
     const status = error.message.includes("rejected") ? 409 : 400;

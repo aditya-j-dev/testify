@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Clock, Send, ShieldAlert, CloudOff, CloudTick } from "lucide-react";
+import { Clock, Send, ShieldAlert, CloudOff, CloudCheck } from "lucide-react";
+
 
 export default function TestEngine({ attemptId }) {
   const router = useRouter();
@@ -131,7 +132,8 @@ export default function TestEngine({ attemptId }) {
          <div className="flex items-center gap-4">
             {/* Sync Indicator */}
             {syncStatus === "syncing" && <span className="text-sm text-amber-500 animate-pulse">Syncing...</span>}
-            {syncStatus === "success" && <span className="text-sm text-emerald-500 flex items-center gap-1"><CloudTick className="w-4 h-4"/> Saved</span>}
+            {syncStatus === "success" && <span className="text-sm text-emerald-500 flex items-center gap-1"><CloudCheck className="w-4 h-4"/> Saved</span>}
+
             {syncStatus === "error" && <span className="text-sm text-rose-500 flex items-center gap-1"><CloudOff className="w-4 h-4"/> Network Error</span>}
             
             <button onClick={submitFinal} disabled={loading} className="bg-rose-600 hover:bg-rose-700 text-white px-6 py-2 flex items-center gap-2 rounded-md font-medium shadow-sm transition-colors">

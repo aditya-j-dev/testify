@@ -1,6 +1,6 @@
 import { verifyToken } from "@/lib/middlewares/auth.middleware.js";
 import { requireRole } from "@/lib/middlewares/role.middleware.js";
-import { saveAnswerService } from "@/lib/services/attempt.service.js";
+import { syncAnswers } from "@/lib/services/attempt.service.js";
 
 export async function POST(req) {
 
@@ -12,12 +12,15 @@ export async function POST(req) {
 
     const body = await req.json();
 
-    const answer = await saveAnswerService(decoded.userId, body);
+    // body: { attemptId, questionId, selectedOptions, subjectiveText, clientSavedAt }
+    const { attemptId, ...answerData } = body;
+    const result = await syncAnswers(decoded.userId, attemptId, [answerData]);
 
     return Response.json({
       success: true,
-      answer
+      result
     });
+
 
   } catch (error) {
 

@@ -1,6 +1,6 @@
 import { verifyToken } from "@/lib/middlewares/auth.middleware.js";
 import { requireRole } from "@/lib/middlewares/role.middleware.js";
-import { startAttemptService } from "@/lib/services/attempt.service.js";
+import { startAttempt } from "@/lib/services/attempt.service.js";
 
 export async function POST(req) {
 
@@ -14,7 +14,7 @@ export async function POST(req) {
 
     const { examId } = body;
 
-    const attempt = await startAttemptService(decoded.userId, examId);
+    const attempt = await startAttempt(decoded.userId, examId);
 
     return Response.json({
       success: true,
