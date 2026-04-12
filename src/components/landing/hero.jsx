@@ -37,10 +37,10 @@ export function Hero() {
 
       <div className="relative z-10 max-w-5xl mx-auto px-6 w-full flex flex-col items-center text-center">
         {/* Animated Badge */}
-        <div className="reveal animate-fade-up inline-flex items-center gap-2 px-3 py-1 rounded-full bg-testify-surface border border-testify-border mb-8">
+        {/* <div className="reveal animate-fade-up inline-flex items-center gap-2 px-3 py-1 rounded-full bg-testify-surface border border-testify-border mb-8">
           <div className="w-2 h-2 rounded-full bg-testify-accent animate-pulse-dot"></div>
           <span className="text-xs font-medium text-testify-text">Now available for Indian colleges</span>
-        </div>
+        </div> */}
 
         {/* H1 */}
         <h1 className="reveal animate-fade-up [animation-delay:100ms] text-5xl sm:text-6xl md:text-7xl font-serif text-testify-text mb-6 tracking-tight max-w-4xl">
@@ -54,7 +54,7 @@ export function Hero() {
 
         {/* CTAs */}
         <div className="reveal animate-fade-up [animation-delay:300ms] flex flex-col sm:flex-row gap-4 mb-20 w-full sm:w-auto">
-          <Link href="/register" className="w-full sm:w-auto">
+          <Link href="/get-started" className="w-full sm:w-auto">
             <Button size="lg" className="w-full bg-testify-accent hover:bg-testify-accent2 text-white h-12 px-8 rounded-full text-base">
               Start for free →
             </Button>

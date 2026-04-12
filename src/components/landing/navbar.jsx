@@ -34,7 +34,7 @@ export function Navbar() {
               <Link href="/login" className="text-sm font-medium text-testify-text hover:text-testify-muted transition-colors hidden sm:block">
                 Sign in
               </Link>
-              <Link href="/register">
+              <Link href="/get-started">
                 <Button className="bg-testify-accent hover:bg-testify-accent2 text-white border-0 rounded-full px-6">
                   Get Started →
                 </Button>

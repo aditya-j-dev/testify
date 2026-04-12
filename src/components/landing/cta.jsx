@@ -16,7 +16,7 @@ export function CtaSection() {
         </p>
         
         <div className="flex flex-col sm:flex-row justify-center gap-4">
-          <Link href="/register">
+          <Link href="/get-started">
             <Button size="lg" className="w-full sm:w-auto bg-testify-text hover:bg-white text-testify-bg h-14 px-8 rounded-full text-base font-semibold">
               Create an account
             </Button>
