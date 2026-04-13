@@ -27,16 +27,24 @@ export async function getColleges() {
 }
 
 export async function getCollegeById(id) {
-  return prisma.college.findUnique({
-    where: { id },
-    include: {
-      users: {
-        where: { role: "ADMIN" },
-        select: { id: true, name: true, email: true, createdAt: true }
+  const [college, teacherCount, studentCount] = await Promise.all([
+    prisma.college.findUnique({
+      where: { id },
+      include: {
+        users: {
+          where: { role: "ADMIN" },
+          select: { id: true, name: true, email: true, createdAt: true }
+        },
       }
-    }
-  });
+    }),
+    prisma.user.count({ where: { collegeId: id, role: "TEACHER" } }),
+    prisma.user.count({ where: { collegeId: id, role: "STUDENT" } }),
+  ]);
+
+  if (!college) return null;
+  return { ...college, teacherCount, studentCount };
 }
+
 
 export async function updateCollege(id, { name, address }) {
   return prisma.college.update({

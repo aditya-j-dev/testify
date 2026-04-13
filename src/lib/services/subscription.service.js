@@ -142,34 +142,16 @@ export async function checkResourceLimit(collegeId, resource) {
   const plan = await getPlanByType(college.planType);
 
   // Map resource name → plan field + count query
+  // branches and batches are unlimited on all plans
   const limitMap = {
-    branches: {
-      max: plan.maxBranches,
-      count: () => prisma.branch.count({ where: { collegeId } }),
-      label: "branch",
-    },
-    batches: {
-      max: plan.maxBatches,
-      count: async () => {
-        const branches = await prisma.branch.findMany({
-          where: { collegeId },
-          select: { id: true },
-        });
-        const branchIds = branches.map((b) => b.id);
-        return prisma.batch.count({ where: { branchId: { in: branchIds } } });
-      },
-      label: "batch",
-    },
     teachers: {
       max: plan.maxTeachers,
-      count: () =>
-        prisma.user.count({ where: { collegeId, role: "TEACHER" } }),
+      count: () => prisma.user.count({ where: { collegeId, role: "TEACHER" } }),
       label: "teacher",
     },
     students: {
       max: plan.maxStudents,
-      count: () =>
-        prisma.user.count({ where: { collegeId, role: "STUDENT" } }),
+      count: () => prisma.user.count({ where: { collegeId, role: "STUDENT" } }),
       label: "student",
     },
     exams: {
@@ -209,13 +191,7 @@ export async function getCollegeUsage(collegeId) {
 
   const plan = await getPlanByType(college.planType);
 
-  const [branches] = await Promise.all([
-    prisma.branch.findMany({ where: { collegeId }, select: { id: true } }),
-  ]);
-  const branchIds = branches.map((b) => b.id);
-
-  const [batchCount, teacherCount, studentCount, examCount] = await Promise.all([
-    prisma.batch.count({ where: { branchId: { in: branchIds } } }),
+  const [teacherCount, studentCount, examCount] = await Promise.all([
     prisma.user.count({ where: { collegeId, role: "TEACHER" } }),
     prisma.user.count({ where: { collegeId, role: "STUDENT" } }),
     prisma.exam.count({ where: { collegeId } }),
@@ -226,8 +202,6 @@ export async function getCollegeUsage(collegeId) {
     planType: plan.planType,
     features: plan.features,
     usage: {
-      branches: { current: branches.length, max: plan.maxBranches },
-      batches: { current: batchCount, max: plan.maxBatches },
       teachers: { current: teacherCount, max: plan.maxTeachers },
       students: { current: studentCount, max: plan.maxStudents },
       exams: { current: examCount, max: plan.maxExams },
