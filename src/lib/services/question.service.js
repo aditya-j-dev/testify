@@ -16,12 +16,16 @@ export async function createQuestion({
   options 
 }) {
   return prisma.$transaction(async (tx) => {
+    // Look up creator name to store natively
+    const author = await tx.user.findUnique({ where: { id: creatorId }, select: { name: true } });
+
     const question = await tx.question.create({
       data: {
         text,
         type: type.toUpperCase(),
         modelAnswer,
         defaultMarks: parseInt(defaultMarks, 10),
+        creatorName: author?.name || "Unknown Teacher",
         subject: { connect: { id: subjectId } },
         college: { connect: { id: collegeId } },
         creator: { connect: { id: creatorId } },

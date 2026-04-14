@@ -29,7 +29,7 @@ export default function ForcePasswordChange() {
     setError("");
 
     try {
-      await apiRequest("/api/auth/change-password", {
+      await apiRequest("/auth/change-password", {
         method: "POST",
         body: JSON.stringify({ password }),
       });

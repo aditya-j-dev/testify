@@ -7,6 +7,43 @@ const APP_URL = process.env.APP_URL || "http://localhost:3000";
 
 // ─── Welcome / Setup Email ─────────────────────────────────────────────────
 
+export async function sendPasswordResetEmail({ to, resetToken, contactName }) {
+  const resetUrl = `${APP_URL}/reset-password?token=${resetToken}`;
+
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Reset Your Password</title></head>
+<body style="margin:0;padding:0;background:#0f0f14;font-family:Inter,system-ui,sans-serif;">
+  <div style="max-width:520px;margin:40px auto;background:#1a1a24;border:1px solid #2a2a3e;border-radius:16px;overflow:hidden;">
+    <div style="background:linear-gradient(135deg,#4f6ef7 0%,#6366f1 100%);padding:28px 36px;">
+      <span style="color:white;font-size:18px;font-weight:700;">Testify</span>
+    </div>
+    <div style="padding:36px;">
+      <h1 style="color:#f1f1f5;font-size:22px;font-weight:700;margin:0 0 8px;">Reset your password, ${contactName}</h1>
+      <p style="color:#8b8ba7;font-size:14px;line-height:1.6;margin:0 0 24px;">
+        We received a request to reset your password for your Testify account. Click the button below to set a new password. 
+        This link expires in <strong style="color:#f1f1f5;">1 hour</strong>.
+      </p>
+      <a href="${resetUrl}" style="display:block;background:linear-gradient(135deg,#4f6ef7,#6366f1);color:white;text-decoration:none;border-radius:12px;padding:14px 24px;font-size:14px;font-weight:600;text-align:center;margin-bottom:20px;">
+        Reset My Password →
+      </a>
+      <p style="color:#5a5a72;font-size:11px;">
+        If you didn't request a password reset, you can safely ignore this email.
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to,
+    subject: "Testify — Reset your password",
+    html,
+  });
+}
+
 export async function sendWelcomeSetupEmail({ to, contactName, collegeName, trialEndsAt, setupToken }) {
   const setupUrl = `${APP_URL}/auth/setup-account?token=${setupToken}`;
   const trialDate = new Date(trialEndsAt).toLocaleDateString("en-IN", {

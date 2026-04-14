@@ -1,4 +1,5 @@
 import prisma from "../prisma.js";
+import bcrypt from "bcrypt";
 import { checkResourceLimit } from "./subscription.service.js";
 import { safeQuery } from "../db-retry.js";
 
@@ -106,26 +107,37 @@ export async function createUserForCollege(collegeId, { name, email, password, r
 
   const hashedPassword = await bcrypt.hash(finalPassword, 10);
   
+  const relationData = {};
+  if (collegeId) relationData.college = { connect: { id: collegeId } };
+  if (branchId) relationData.branch = { connect: { id: branchId } };
+  if (batchId) relationData.batch = { connect: { id: batchId } };
+  
   const user = await prisma.user.create({
     data: {
       name,
       email,
       passwordHash: hashedPassword,
       role: normalizedRole,
-      collegeId,
-      batchId,
-      branchId,
-      requirePasswordChange
+      requirePasswordChange,
+      ...relationData
     }
   });
 
   // If we generated a password, send the welcome email
   if (requirePasswordChange && (normalizedRole === "TEACHER" || normalizedRole === "STUDENT")) {
-    const college = await prisma.college.findUnique({ 
+    const college = await safeQuery(() => prisma.college.findUnique({ 
       where: { id: collegeId },
       select: { name: true }
-    });
+    }));
     
+    // --- DEVELOPMENT LOGGING ---
+    // Outputting credentials to terminal since free-tier Resend suppresses unverified emails
+    console.log(`\n========================================`);
+    console.log(`👤 NEW ${normalizedRole} REGISTERED`);
+    console.log(`📧 Email: ${email}`);
+    console.log(`🔑 Temp Password: ${finalPassword}`);
+    console.log(`========================================\n`);
+
     await sendTeacherWelcomeEmail({
       to: email,
       name,

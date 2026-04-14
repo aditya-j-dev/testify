@@ -52,6 +52,7 @@ export async function createDraftExam(teacherId, data) {
       collegeId,
       subjectId,
       creatorId: teacherId,
+      creatorName: teacher.name,
       access: (branchId || batchId) ? {
         create: {
           branchId: branchId || null,

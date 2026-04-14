@@ -232,6 +232,8 @@ model User {
   role         Role
 
   requirePasswordChange Boolean @default(false)
+  resetPasswordToken    String? @unique
+  resetPasswordExpires  DateTime?
 
   collegeId String?
   branchId  String?
@@ -327,7 +329,8 @@ model Question {
   id           String       @id @default(uuid())
   subjectId    String
   collegeId    String
-  creatorId    String
+  creatorId    String?
+  creatorName  String?
   text         String
   type         QuestionType
   modelAnswer  String?      // Reference answer for SUBJECTIVE questions
@@ -337,7 +340,7 @@ model Question {
 
   subject Subject          @relation(fields: [subjectId], references: [id], onDelete: Restrict)
   college College          @relation(fields: [collegeId], references: [id], onDelete: Cascade)
-  creator User             @relation("QuestionCreator", fields: [creatorId], references: [id])
+  creator User?            @relation("QuestionCreator", fields: [creatorId], references: [id], onDelete: SetNull)
   options QuestionOption[]
   exams   ExamQuestion[]
   answers Answer[]
@@ -364,15 +367,16 @@ model Exam {
   allowReview      Boolean @default(true)
   maxAttempts      Int     @default(1)
 
-  collegeId String
-  subjectId String
-  creatorId String
+  collegeId   String
+  subjectId   String
+  creatorId   String?
+  creatorName String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   college   College        @relation(fields: [collegeId], references: [id], onDelete: Cascade)
   subject   Subject        @relation(fields: [subjectId], references: [id], onDelete: Restrict)
-  creator   User           @relation("ExamCreator", fields: [creatorId], references: [id])
+  creator   User?          @relation("ExamCreator", fields: [creatorId], references: [id], onDelete: SetNull)
   questions ExamQuestion[]
   attempts  Attempt[]
   results   Result[]
