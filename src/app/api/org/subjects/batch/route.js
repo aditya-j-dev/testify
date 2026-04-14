@@ -9,7 +9,7 @@ import * as XLSX from "xlsx";
 export async function POST(req) {
   try {
     // 1. Auth Check
-    const token = req.headers.get("Authorization")?.split(" ")[1] || req.cookies.get("token")?.value;
+    const token = req.headers.get("Authorization")?.split(" ")[1] || req.cookies.get("testify-token")?.value;
     if (!token) return Response.json({ success: false, message: "Unauthorized" }, { status: 401 });
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);

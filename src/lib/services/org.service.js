@@ -97,8 +97,8 @@ export async function createUserForCollege(collegeId, { name, email, password, r
   let finalPassword = password;
   let requirePasswordChange = false;
 
-  // If no password provided for a teacher, generate one and trigger invitation email
-  if (!finalPassword && normalizedRole === "TEACHER") {
+  // If no password provided for a teacher or student, generate one and trigger invitation email
+  if (!finalPassword && (normalizedRole === "TEACHER" || normalizedRole === "STUDENT")) {
     finalPassword = generateRandomPassword();
     requirePasswordChange = true;
   }

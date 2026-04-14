@@ -10,7 +10,7 @@ import jwt from "jsonwebtoken";
  */
 export async function POST(req) {
   try {
-    const token = req.cookies.get("token")?.value || req.headers.get("Authorization")?.split(" ")[1];
+    const token = req.cookies.get("testify-token")?.value || req.headers.get("Authorization")?.split(" ")[1];
 
     if (!token) {
       return Response.json({ success: false, message: "Unauthorized" }, { status: 401 });

@@ -90,7 +90,7 @@ export function OnboardingForm() {
     setError("");
 
     try {
-      await onboardCollegeClient({
+      const result = await onboardCollegeClient({
         collegeName: form.collegeName,
         address: form.address,
         adminName: form.adminName,
