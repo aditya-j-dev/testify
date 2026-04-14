@@ -38,7 +38,8 @@ const PLAN_COLORS = {
   ENTERPRISE: "from-amber-600 to-orange-700",
 };
 
-const PLANS = [
+// Hardcoded fallback or empty initial state
+const FALLBACK_PLANS = [
   {
     type: "STARTER",
     name: "Starter",
@@ -73,27 +74,24 @@ function UsageBar({ label, current, max, icon: Icon }) {
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between text-sm">
-        <div className="flex items-center gap-1.5 text-slate-300">
+        <div className="flex items-center gap-1.5 text-muted-foreground">
           <Icon className="w-3.5 h-3.5" />
           <span>{label}</span>
         </div>
-        <span className={`text-xs font-medium ${isAtLimit ? "text-red-400" : isNearLimit ? "text-amber-400" : "text-slate-400"}`}>
+        <span className={`text-xs font-medium ${isAtLimit ? "text-destructive" : isNearLimit ? "text-amber-500" : "text-muted-foreground"}`}>
           {isUnlimited ? `${current} / ∞` : `${current} / ${max}`}
         </span>
       </div>
-      {!isUnlimited && (
-        <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
+      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+        {isUnlimited ? (
+          <div className="h-full w-full rounded-full bg-emerald-500/30" />
+        ) : (
           <div
-            className={`h-full rounded-full transition-all duration-500 ${isAtLimit ? "bg-red-500" : isNearLimit ? "bg-amber-500" : "bg-indigo-500"}`}
+            className={`h-full rounded-full transition-all duration-500 ${isAtLimit ? "bg-destructive" : isNearLimit ? "bg-amber-500" : "bg-primary"}`}
             style={{ width: `${percent}%` }}
           />
-        </div>
-      )}
-      {isUnlimited && (
-        <div className="h-1.5 rounded-full bg-slate-800 overflow-hidden">
-          <div className="h-full w-full rounded-full bg-emerald-500/30" />
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -103,6 +101,7 @@ export default function BillingPage() {
   const { user } = useAuth();
   const [billing, setBilling] = useState(null);
   const [payments, setPayments] = useState([]);
+  const [availablePlans, setAvailablePlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [upgrading, setUpgrading] = useState(null); // planType being upgraded to
   const [cancelling, setCancelling] = useState(false);
@@ -118,12 +117,14 @@ export default function BillingPage() {
     setLoading(true);
     setError(null);
     try {
-      const [billingRes, paymentsRes] = await Promise.all([
+      const [billingRes, paymentsRes, plansRes] = await Promise.all([
         fetch("/api/account/billing").then((r) => r.json()),
         fetch("/api/payments/history").then((r) => r.json()),
+        fetch("/api/plans").then((r) => r.json()),
       ]);
       if (billingRes.success) setBilling(billingRes.billing);
       if (paymentsRes.success) setPayments(paymentsRes.payments);
+      if (plansRes.success) setAvailablePlans(plansRes.plans);
     } catch (err) {
       setError("Failed to load billing data.");
     } finally {
@@ -227,8 +228,8 @@ export default function BillingPage() {
     <div className="space-y-8 max-w-5xl mx-auto">
       {/* Page header */}
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-100">Billing & Subscription</h1>
-        <p className="text-slate-400 mt-1 text-sm">Manage your plan, payments, and account lifecycle.</p>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Billing & Subscription</h1>
+        <p className="text-muted-foreground mt-1 text-sm">Manage your plan, payments, and account lifecycle.</p>
       </div>
 
       {/* Error banner */}
@@ -303,74 +304,94 @@ export default function BillingPage() {
 
       {/* Resource usage */}
       {usage && (
-        <Card className="bg-slate-900 border-slate-800">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base text-slate-200 flex items-center gap-2">
-              <ArrowUpRight className="w-4 h-4 text-indigo-400" />
-              Resource Usage
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 pt-2">
-            <UsageBar label="Branches" current={usage.branches.current} max={usage.branches.max} icon={Building2} />
-            <UsageBar label="Batches" current={usage.batches.current} max={usage.batches.max} icon={GraduationCap} />
-            <UsageBar label="Teachers" current={usage.teachers.current} max={usage.teachers.max} icon={Users} />
-            <UsageBar label="Students" current={usage.students.current} max={usage.students.max} icon={BookOpen} />
-            <UsageBar label="Exams" current={usage.exams.current} max={usage.exams.max} icon={ClipboardList} />
-          </CardContent>
-        </Card>
+        <div className="bg-card border rounded-2xl p-5">
+          <h2 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-4">
+            <ArrowUpRight className="w-4 h-4 text-primary" /> Resource Usage
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+            {usage.teachers && <UsageBar label="Teachers" current={usage.teachers.current} max={usage.teachers.max} icon={Users} />}
+            {usage.students && <UsageBar label="Students" current={usage.students.current} max={usage.students.max} icon={BookOpen} />}
+            {usage.exams    && <UsageBar label="Exams"    current={usage.exams.current}    max={usage.exams.max}    icon={ClipboardList} />}
+          </div>
+        </div>
       )}
 
       {/* Plan upgrade cards */}
       {status !== "CANCELLED" && (
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold text-slate-200">
+          <h2 className="text-base font-semibold text-foreground">
             {status === "ACTIVE" ? "Change Plan" : "Choose a Plan"}
           </h2>
           <div className="grid gap-4 sm:grid-cols-3">
-            {PLANS.map((plan) => (
-              <div
-                key={plan.type}
-                className={`relative rounded-2xl border p-5 space-y-4 transition-all ${
-                  plan.recommended
-                    ? "border-indigo-500/50 bg-indigo-500/5"
-                    : "border-slate-800 bg-slate-900/50 hover:border-slate-700"
-                }`}
-              >
-                {plan.recommended && (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs font-semibold px-3 py-1 rounded-full bg-indigo-600 text-white">
-                    Recommended
-                  </span>
-                )}
-                <div>
-                  <h3 className="text-slate-200 font-bold text-lg">{plan.name}</h3>
-                  <div className="flex items-baseline gap-1 mt-1">
-                    <span className="text-2xl font-extrabold text-slate-100">{plan.price}</span>
-                    <span className="text-slate-500 text-sm">{plan.period}</span>
-                  </div>
-                </div>
-                <ul className="space-y-1.5">
-                  {plan.features.map((f) => (
-                    <li key={f} className="flex items-center gap-2 text-sm text-slate-400">
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-                <Button
-                  onClick={() => handleUpgrade(plan.type)}
-                  disabled={!!upgrading || billing?.planType === plan.type}
-                  className={`w-full ${plan.recommended ? "bg-indigo-600 hover:bg-indigo-700" : "bg-slate-800 hover:bg-slate-700 text-slate-200"}`}
+            {(availablePlans.length > 0 ? availablePlans : FALLBACK_PLANS).map((plan) => {
+              const planType = plan.planType || plan.type;
+              const isCurrent = billing?.planType === planType;
+              const price = plan.priceInPaise ? `₹${(plan.priceInPaise / 100).toLocaleString()}` : plan.price;
+              
+              // Extract features from JSON or use hardcoded ones
+              let features = [];
+              if (Array.isArray(plan.features)) features = plan.features;
+              else if (plan.features && typeof plan.features === 'object') {
+                  // Map Json features to strings
+                  if (plan.maxTeachers) features.push(`${plan.maxTeachers} Teachers`);
+                  else features.push("Unlimited Teachers");
+                  if (plan.maxStudents) features.push(`${plan.maxStudents} Students`);
+                  else features.push("Unlimited Students");
+                  if (plan.features.proctoring) features.push("Proctoring Enabled");
+                  if (plan.features.analytics) features.push("Advanced Analytics");
+              } else {
+                  features = plan.features || [];
+              }
+
+              return (
+                <div
+                  key={planType}
+                  className={`relative rounded-2xl border p-5 space-y-4 transition-all ${
+                    planType === "PROFESSIONAL"
+                      ? "border-primary/50 bg-primary/5"
+                      : "border-border bg-card hover:border-border/80"
+                  }`}
                 >
-                  {upgrading === plan.type ? (
-                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Processing…</>
-                  ) : billing?.planType === plan.type ? (
-                    "Current Plan"
-                  ) : (
-                    <><CreditCard className="w-4 h-4 mr-2" /> Upgrade</>
+                  {planType === "PROFESSIONAL" && (
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs font-semibold px-3 py-1 rounded-full bg-primary text-primary-foreground">
+                      Recommended
+                    </span>
                   )}
-                </Button>
-              </div>
-            ))}
+                  <div>
+                    <h3 className="text-foreground font-bold text-lg">{plan.name}</h3>
+                    <div className="flex items-baseline gap-1 mt-1">
+                      <span className="text-2xl font-extrabold text-foreground">{price}</span>
+                      <span className="text-muted-foreground text-sm">/month</span>
+                    </div>
+                  </div>
+                  <ul className="space-y-1.5 min-h-[120px]">
+                    {features.map((f, i) => (
+                      <li key={i} className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                  <Button
+                    onClick={() => handleUpgrade(planType)}
+                    disabled={!!upgrading || isCurrent}
+                    className={`w-full ${
+                      planType === "PROFESSIONAL"
+                        ? "bg-primary hover:bg-primary/90 text-primary-foreground"
+                        : "bg-muted hover:bg-accent text-foreground"
+                    }`}
+                  >
+                    {upgrading === planType ? (
+                      <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Processing…</>
+                    ) : isCurrent ? (
+                      "Current Plan"
+                    ) : (
+                      <><CreditCard className="w-4 h-4 mr-2" />Upgrade</>
+                    )}
+                  </Button>
+                </div>
+              );
+            })}
           </div>
         </section>
       )}
@@ -378,63 +399,60 @@ export default function BillingPage() {
       {/* Payment history */}
       {payments.length > 0 && (
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold text-slate-200 flex items-center gap-2">
-            <CreditCard className="w-5 h-5 text-indigo-400" />
-            Payment History
+          <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+            <CreditCard className="w-5 h-5 text-primary" /> Payment History
           </h2>
-          <Card className="bg-slate-900 border-slate-800">
-            <CardContent className="pt-4">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-slate-500 uppercase tracking-wider border-b border-slate-800">
-                    <th className="pb-3 font-medium">Date</th>
-                    <th className="pb-3 font-medium">Plan</th>
-                    <th className="pb-3 font-medium">Amount</th>
-                    <th className="pb-3 font-medium text-right">Status</th>
+          <div className="bg-card border rounded-2xl overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-muted-foreground uppercase tracking-wider border-b border-border">
+                  <th className="px-5 py-3 font-medium">Date</th>
+                  <th className="px-5 py-3 font-medium">Plan</th>
+                  <th className="px-5 py-3 font-medium">Amount</th>
+                  <th className="px-5 py-3 font-medium text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {payments.map((p) => (
+                  <tr key={p.id}>
+                    <td className="px-5 py-3 text-muted-foreground">
+                      {new Date(p.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                    </td>
+                    <td className="px-5 py-3 text-foreground font-medium">{p.planType}</td>
+                    <td className="px-5 py-3 text-foreground">₹{(p.amountInPaise / 100).toFixed(0)}</td>
+                    <td className="px-5 py-3 text-right">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                        p.status === "SUCCESS" ? "bg-emerald-500/15 text-emerald-500" :
+                        p.status === "FAILED" ? "bg-red-500/15 text-red-500" :
+                        p.status === "REFUNDED" ? "bg-blue-500/15 text-blue-500" :
+                        "bg-muted text-muted-foreground"
+                      }`}>
+                        {p.status}
+                      </span>
+                    </td>
                   </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {payments.map((p) => (
-                    <tr key={p.id} className="group">
-                      <td className="py-3 text-slate-400">
-                        {new Date(p.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                      </td>
-                      <td className="py-3 text-slate-300 font-medium">{p.planType}</td>
-                      <td className="py-3 text-slate-300">₹{(p.amountInPaise / 100).toFixed(0)}</td>
-                      <td className="py-3 text-right">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                          p.status === "SUCCESS" ? "bg-emerald-500/15 text-emerald-400" :
-                          p.status === "FAILED" ? "bg-red-500/15 text-red-400" :
-                          p.status === "REFUNDED" ? "bg-blue-500/15 text-blue-400" :
-                          "bg-slate-700 text-slate-400"
-                        }`}>
-                          {p.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       )}
 
       {/* Danger zone */}
       {status !== "CANCELLED" && (
         <section className="space-y-4">
-          <h2 className="text-lg font-semibold text-red-400">Danger Zone</h2>
-          <div className="border border-red-500/20 bg-red-500/5 rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <h2 className="text-base font-semibold text-destructive">Danger Zone</h2>
+          <div className="border border-destructive/20 bg-destructive/5 rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div>
-              <h3 className="text-slate-200 font-medium">Cancel Account</h3>
-              <p className="text-slate-400 text-sm mt-1">
+              <h3 className="text-foreground font-medium">Cancel Account</h3>
+              <p className="text-muted-foreground text-sm mt-1">
                 Your data will be retained for a grace period before permanent deletion.
               </p>
             </div>
             <Button
               variant="outline"
               onClick={() => setShowCancelModal(true)}
-              className="border-red-500/40 text-red-400 hover:bg-red-500/10 hover:border-red-500/60 shrink-0"
+              className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:border-destructive/60 shrink-0"
             >
               <XCircle className="w-4 h-4 mr-2" />
               Cancel Account
@@ -446,23 +464,23 @@ export default function BillingPage() {
       {/* Cancel confirmation modal */}
       {showCancelModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-5">
+          <div className="bg-card border rounded-2xl p-6 w-full max-w-md shadow-2xl space-y-5">
             <div className="flex items-center gap-3">
-              <div className="p-2 rounded-full bg-red-500/15">
-                <AlertTriangle className="w-5 h-5 text-red-400" />
+              <div className="p-2 rounded-full bg-destructive/15">
+                <AlertTriangle className="w-5 h-5 text-destructive" />
               </div>
-              <h3 className="text-slate-100 font-bold text-lg">Confirm Cancellation</h3>
+              <h3 className="text-foreground font-bold text-lg">Confirm Cancellation</h3>
             </div>
-            <p className="text-slate-400 text-sm leading-relaxed">
+            <p className="text-muted-foreground text-sm leading-relaxed">
               Are you sure you want to cancel your account? You'll have a 7-day grace period to change your mind.
-              After that, <strong className="text-slate-300">all data will be permanently deleted</strong>.
+              After that, <strong className="text-foreground">all data will be permanently deleted</strong>.
             </p>
             <div className="space-y-2">
-              <label className="text-sm text-slate-400 font-medium">Reason (optional)</label>
+              <label className="text-sm text-muted-foreground font-medium">Reason (optional)</label>
               <select
                 value={cancelReason}
                 onChange={(e) => setCancelReason(e.target.value)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-slate-200 text-sm focus:outline-none focus:border-indigo-500"
+                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-foreground text-sm focus:outline-none focus:border-primary"
               >
                 <option value="">Select a reason…</option>
                 <option value="TOO_EXPENSIVE">Too expensive</option>
@@ -475,18 +493,18 @@ export default function BillingPage() {
             <div className="flex gap-3 pt-2">
               <Button
                 variant="outline"
-                className="flex-1 border-slate-700 text-slate-300 hover:bg-slate-800"
+                className="flex-1 border-border text-muted-foreground hover:bg-accent"
                 onClick={() => setShowCancelModal(false)}
                 disabled={cancelling}
               >
                 Keep Account
               </Button>
               <Button
-                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                className="flex-1 bg-destructive hover:bg-destructive/90 text-white"
                 onClick={handleCancel}
                 disabled={cancelling}
               >
-                {cancelling ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Cancelling…</> : "Confirm Cancel"}
+                {cancelling ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Cancelling…</> : "Confirm Cancel"}
               </Button>
             </div>
           </div>

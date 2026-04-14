@@ -40,10 +40,10 @@ export async function registerUser({ name, email, password, role }) {
     }
   );
 
-  const { passwordHash: _, ...safeUser } = user;
+  const { passwordHash: _, requirePasswordChange: __, ...safeUser } = { ...user, requirePasswordChange: user.requirePasswordChange };
   return {
     token,
-    user: safeUser,
+    user: { ...safeUser, requirePasswordChange: user.requirePasswordChange },
   };
 }
 
@@ -84,6 +84,25 @@ export async function loginUser({ email, password }) {
 
     return {
     token,
-    user: safeUser,
+    user: { ...safeUser, requirePasswordChange: user.requirePasswordChange },
     };
+}
+
+/**
+ * Updates a user's password and clears the requirePasswordChange flag.
+ */
+export async function updateUserPassword(userId, newPassword) {
+  if (!newPassword || newPassword.length < 8) {
+    throw new Error("Password must be at least 8 characters");
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 10);
+
+  return prisma.user.update({
+    where: { id: userId },
+    data: {
+      passwordHash,
+      requirePasswordChange: false // Clear the flag
+    }
+  });
 }

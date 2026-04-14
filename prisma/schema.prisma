@@ -231,6 +231,8 @@ model User {
   name         String
   role         Role
 
+  requirePasswordChange Boolean @default(false)
+
   collegeId String?
   branchId  String?
   batchId   String?
@@ -276,6 +278,7 @@ model UserBranchAccess {
 model Subject {
   id        String   @id @default(uuid())
   name      String
+  code      String?  // e.g. "MAT101", "CS50"
   credits   Int      @default(3) // For GPA calculation (e.g., 3 or 4 credits)
   collegeId String
   createdAt DateTime @default(now())
@@ -286,6 +289,7 @@ model Subject {
   enrollments Enrollment[]
 
   @@unique([name, collegeId])
+  @@unique([code, collegeId])
 }
 
 // Tracks which students are enrolled in which subjects and which semester

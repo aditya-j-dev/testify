@@ -55,11 +55,26 @@ export const orgClient = {
         body: JSON.stringify(userData),
       });
       return res.json();
+    },
+    async delete(id) {
+      const res = await fetch(`/api/org/users/${id}`, { method: "DELETE" });
+      return res.json();
+    },
+    async batchUpload(file, role = "TEACHER") {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("role", role);
+      const res = await fetch("/api/org/users/batch", {
+        method: "POST",
+        body: formData,
+      });
+      return res.json();
     }
   },
 
   // --- Branches ---
   branches: {
+
     async list(collegeId) {
       const res = await fetch(`/api/org/branch?collegeId=${collegeId}`);
       return res.json();
@@ -70,6 +85,18 @@ export const orgClient = {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(data),
       });
+      return res.json();
+    },
+    async update(id, data) {
+      const res = await fetch(`/api/org/branch/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    async delete(id) {
+      const res = await fetch(`/api/org/branch/${id}`, { method: "DELETE" });
       return res.json();
     }
   },
@@ -87,6 +114,26 @@ export const orgClient = {
         body: JSON.stringify(data),
       });
       return res.json();
+    },
+    async update(id, data) {
+      const res = await fetch(`/api/org/batch/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    async delete(id) {
+       const res = await fetch(`/api/org/batch/${id}`, { method: "DELETE" });
+       return res.json();
+    },
+    async performMaintenance(collegeId) {
+       const res = await fetch(`/api/org/batch/maintenance?collegeId=${collegeId}`, { method: "POST" });
+       return res.json();
+    },
+    async getYears(collegeId) {
+       const res = await fetch(`/api/org/batch/years?collegeId=${collegeId}`);
+       return res.json();
     }
   },
 
@@ -115,6 +162,23 @@ export const orgClient = {
     async delete(id) {
        const res = await fetch(`/api/org/subjects/${id}`, { method: "DELETE" });
        return res.json();
+    },
+    async batchCreate(data) {
+      const res = await fetch("/api/org/subjects/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    async batchUpload(file) {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/org/subjects/batch", {
+        method: "POST",
+        body: formData,
+      });
+      return res.json();
     }
   },
 

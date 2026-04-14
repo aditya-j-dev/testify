@@ -266,3 +266,60 @@ export async function sendSetupReminderEmail({ to, contactName, collegeName, set
     html,
   });
 }
+export async function sendTeacherWelcomeEmail({ to, name, tempPassword, collegeName }) {
+  const loginUrl = `${APP_URL}/login`;
+
+  const html = `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Your Faculty Credentials</title></head>
+<body style="margin:0;padding:0;background:#0f0f14;font-family:Inter,system-ui,sans-serif;">
+  <div style="max-width:520px;margin:40px auto;background:#1a1a24;border:1px solid #2a2a3e;border-radius:16px;overflow:hidden;">
+    <div style="background:linear-gradient(135deg,#4f6ef7 0%,#6366f1 100%);padding:28px 36px;">
+      <span style="color:white;font-size:18px;font-weight:700;">Testify</span>
+    </div>
+    <div style="padding:36px;">
+      <h1 style="color:#f1f1f5;font-size:22px;font-weight:700;margin:0 0 8px;">Welcome to ${collegeName}, ${name}!</h1>
+      <p style="color:#8b8ba7;font-size:14px;line-height:1.6;margin:0 0 24px;">
+        You have been registered as a Faculty member on the Testify Exam Platform. 
+        Please use the following temporary credentials to log in.
+      </p>
+
+      <div style="background:#232333;border:1px solid #33334d;border-radius:12px;padding:20px;margin-bottom:28px;">
+        <p style="color:#8b8ba7;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin:0 0 10px;">Login Details</p>
+        <div style="margin-bottom:12px;">
+          <span style="color:#5a5a72;font-size:13px;">Email:</span>
+          <br>
+          <strong style="color:#f1f1f5;font-size:15px;">${to}</strong>
+        </div>
+        <div>
+          <span style="color:#5a5a72;font-size:13px;">Temporary Password:</span>
+          <br>
+          <strong style="color:#f1f1f5;font-size:15px;letter-spacing:1px;">${tempPassword}</strong>
+        </div>
+      </div>
+
+      <p style="color:#fbbf24;font-size:13px;background:rgba(251,191,36,0.1);padding:12px;border-radius:8px;border:1px solid rgba(251,191,36,0.2);margin-bottom:24px;">
+        <strong>Note:</strong> You will be required to change this password immediately after your first login.
+      </p>
+
+      <a href="${loginUrl}" style="display:block;background:linear-gradient(135deg,#4f6ef7,#6366f1);color:white;text-decoration:none;border-radius:12px;padding:14px 24px;font-size:14px;font-weight:600;text-align:center;">
+        Log In to Dashboard →
+      </a>
+    </div>
+    <div style="border-top:1px solid #2a2a3e;padding:20px 40px;">
+      <p style="color:#5a5a72;font-size:12px;margin:0;text-align:center;">
+        © Testify Exam Platform · Secure institutional access
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+
+  return resend.emails.send({
+    from: FROM_EMAIL,
+    to,
+    subject: `Your Faculty Access — ${collegeName}`,
+    html,
+  });
+}

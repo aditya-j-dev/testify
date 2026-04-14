@@ -160,6 +160,7 @@ export function AuthProvider({ children }) {
         login,
         logout,
         loadUser,
+        refreshUser: loadUser,
         isAuthenticated: !!user,
       }}
     >

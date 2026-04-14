@@ -58,7 +58,7 @@ export default function Sidebar() {
           </>
         )}
 
-        {(user?.role === "TEACHER" || user?.role === "ADMIN") && (
+        {user?.role === "TEACHER" && (
           <>
             <p className="px-3 text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-1 mt-3">Faculty Control</p>
             {navLink("/dashboard/teacher/exams", ClipboardList, "Manage Exams")}

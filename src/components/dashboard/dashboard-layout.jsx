@@ -5,9 +5,17 @@ import Sidebar from "./sidebar";
 import Header from "./header";
 import { usePathname } from "next/navigation";
 
+import ForcePasswordChange from "./force-password-change";
+import { useAuth } from "@/context/auth-context";
+
 export default function DashboardLayout({ children }) {
   const pathname = usePathname();
+  const { user } = useAuth();
   const isActiveExam = pathname?.endsWith("/active");
+
+  if (user?.requirePasswordChange) {
+    return <ForcePasswordChange />;
+  }
 
   if (isActiveExam) {
      return (
