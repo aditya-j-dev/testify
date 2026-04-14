@@ -1,4 +1,5 @@
 import prisma from "../prisma.js";
+import { safeQuery } from "../db-retry.js";
 
 // ─── Plan Definitions ─────────────────────────────────────────────────────
 // This is the ONLY place plan limits are defined. All application code
@@ -191,11 +192,9 @@ export async function getCollegeUsage(collegeId) {
 
   const plan = await getPlanByType(college.planType);
 
-  const [teacherCount, studentCount, examCount] = await Promise.all([
-    prisma.user.count({ where: { collegeId, role: "TEACHER" } }),
-    prisma.user.count({ where: { collegeId, role: "STUDENT" } }),
-    prisma.exam.count({ where: { collegeId } }),
-  ]);
+  const teacherCount = await safeQuery(() => prisma.user.count({ where: { collegeId, role: "TEACHER" } }));
+  const studentCount = await safeQuery(() => prisma.user.count({ where: { collegeId, role: "STUDENT" } }));
+  const examCount = await safeQuery(() => prisma.exam.count({ where: { collegeId } }));
 
   return {
     plan: plan.name,

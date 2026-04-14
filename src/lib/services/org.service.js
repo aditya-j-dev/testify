@@ -1,5 +1,6 @@
 import prisma from "../prisma.js";
 import { checkResourceLimit } from "./subscription.service.js";
+import { safeQuery } from "../db-retry.js";
 
 // --- College ---
 export async function createCollege({ name, address }) {
@@ -27,21 +28,21 @@ export async function getColleges() {
 }
 
 export async function getCollegeById(id) {
-  const [college, teacherCount, studentCount] = await Promise.all([
-    prisma.college.findUnique({
-      where: { id },
-      include: {
-        users: {
-          where: { role: "ADMIN" },
-          select: { id: true, name: true, email: true, createdAt: true }
-        },
-      }
-    }),
-    prisma.user.count({ where: { collegeId: id, role: "TEACHER" } }),
-    prisma.user.count({ where: { collegeId: id, role: "STUDENT" } }),
-  ]);
+  const college = await safeQuery(() => prisma.college.findUnique({
+    where: { id },
+    include: {
+      users: {
+        where: { role: "ADMIN" },
+        select: { id: true, name: true, email: true, createdAt: true }
+      },
+    }
+  }));
 
   if (!college) return null;
+
+  const teacherCount = await safeQuery(() => prisma.user.count({ where: { collegeId: id, role: "TEACHER" } }));
+  const studentCount = await safeQuery(() => prisma.user.count({ where: { collegeId: id, role: "STUDENT" } }));
+
   return { ...college, teacherCount, studentCount };
 }
 

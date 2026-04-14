@@ -1,4 +1,5 @@
 import prisma from "../prisma.js";
+import { safeWrite, safeQuery } from "../db-retry.js";
 
 // --- Manual Grading ---
 export async function gradeSubjectiveAnswer(teacherId, answerId, marksObtained, feedback) {
@@ -234,7 +235,7 @@ export async function autoGradeAttempt(attemptId, tx = null) {
     let totalMarks = 0;
     let hasSubjective = false;
 
-    const gradingOperations = attempt.exam.questions.map((eq) => {
+    const gradingUpdates = attempt.exam.questions.map((eq) => {
       const answer = attempt.answers.find((a) => a.questionId === eq.questionId);
       if (!answer) return null;
 
@@ -260,24 +261,25 @@ export async function autoGradeAttempt(attemptId, tx = null) {
         
         totalMarks += marks;
 
-        return client.answer.update({
+        // Return a lazy promise wrapper to ensure sequential execution
+        return () => safeWrite(() => client.answer.update({
           where: { id: answer.id },
           data: {
             marksObtained: marks,
             isCorrect: isCorrect
           }
-        });
+        }));
       } else {
         hasSubjective = true;
         return null;
       }
     }).filter(Boolean);
 
-    // Run answer updates
-    if (gradingOperations.length > 0) {
-       // If we're already in a transaction (tx is provided), we can't use $transaction on it easily.
-       // We just wait for all of them.
-       await Promise.all(gradingOperations);
+    // Run answer updates sequentially to avoid write batch active errors
+    if (gradingUpdates.length > 0) {
+       for (const updateOp of gradingUpdates) {
+           await updateOp();
+       }
     }
 
     // Recalculate totals safely
@@ -357,9 +359,11 @@ export async function getStudentResultSummary(studentId) {
   // Unique semesters from results
   const semesters = [...new Set(results.map(r => r.exam.semester).filter(Boolean))];
   
-  const gpaBySemester = await Promise.all(semesters.map(async sem => {
-    return calculateSemesterGPA(studentId, sem);
-  }));
+  const gpaBySemester = [];
+  for (const sem of semesters) {
+      const gpa = await safeQuery(() => calculateSemesterGPA(studentId, sem));
+      gpaBySemester.push(gpa);
+  }
 
   return {
     results,

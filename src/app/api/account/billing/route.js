@@ -27,10 +27,8 @@ export async function GET() {
       return Response.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
 
-    const [college, usage] = await Promise.all([
-      resolveCollegeSubscription(auth.collegeId),
-      getCollegeUsage(auth.collegeId),
-    ]);
+    const college = await resolveCollegeSubscription(auth.collegeId);
+    const usage = await getCollegeUsage(auth.collegeId);
 
     return Response.json({
       success: true,

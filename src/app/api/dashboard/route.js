@@ -28,19 +28,17 @@ export async function GET() {
     let stats = {};
 
     if (role === "TEACHER" || role === "ADMIN") {
-      const [examCount, draftCount, activeAttempts, pendingGrades] = await Promise.all([
-        prisma.exam.count({ where: { creatorId: userId } }),
-        prisma.exam.count({ where: { creatorId: userId, status: "DRAFT" } }),
-        prisma.attempt.count({
-          where: { exam: { creatorId: userId }, status: "IN_PROGRESS" },
-        }),
-        prisma.result.count({
-          where: {
-            exam: { creatorId: userId },
-            gradingStatus: "MANUAL_REVIEW_PENDING",
-          },
-        }),
-      ]);
+      const examCount = await prisma.exam.count({ where: { creatorId: userId } });
+      const draftCount = await prisma.exam.count({ where: { creatorId: userId, status: "DRAFT" } });
+      const activeAttempts = await prisma.attempt.count({
+        where: { exam: { creatorId: userId }, status: "IN_PROGRESS" },
+      });
+      const pendingGrades = await prisma.result.count({
+        where: {
+          exam: { creatorId: userId },
+          gradingStatus: "MANUAL_REVIEW_PENDING",
+        },
+      });
 
       stats = {
         role,
@@ -53,40 +51,36 @@ export async function GET() {
 
     if (role === "ADMIN") {
       // Also add college-level stats
-      const [branchCount, teacherCount, studentCount, examTotal] = await Promise.all([
-        prisma.branch.count({ where: { collegeId } }),
-        prisma.user.count({ where: { collegeId, role: "TEACHER" } }),
-        prisma.user.count({ where: { collegeId, role: "STUDENT" } }),
-        prisma.exam.count({ where: { collegeId } }),
-      ]);
+      const branchCount = await prisma.branch.count({ where: { collegeId } });
+      const teacherCount = await prisma.user.count({ where: { collegeId, role: "TEACHER" } });
+      const studentCount = await prisma.user.count({ where: { collegeId, role: "STUDENT" } });
+      const examTotal = await prisma.exam.count({ where: { collegeId } });
       stats.college = { branchCount, teacherCount, studentCount, examTotal };
     }
 
     if (role === "STUDENT") {
-      const [availableExams, completedAttempts, inProgressAttempt] = await Promise.all([
-        prisma.exam.count({
-          where: {
-            collegeId,
-            status: { in: ["PUBLISHED", "ACTIVE"] },
-            access: {
-              some: {
-                OR: [
-                  { batchId: auth.batchId },
-                  { branchId: auth.branchId, batchId: null },
-                  { branchId: null, batchId: null },
-                ],
-              },
+      const availableExams = await prisma.exam.count({
+        where: {
+          collegeId,
+          status: { in: ["PUBLISHED", "ACTIVE"] },
+          access: {
+            some: {
+              OR: [
+                { batchId: auth.batchId },
+                { branchId: auth.branchId, batchId: null },
+                { branchId: null, batchId: null },
+              ],
             },
           },
-        }),
-        prisma.attempt.count({
-          where: { userId, status: { in: ["SUBMITTED", "TIMED_OUT", "CHEATED"] } },
-        }),
-        prisma.attempt.findFirst({
-          where: { userId, status: "IN_PROGRESS" },
-          include: { exam: { select: { title: true, duration: true } } },
-        }),
-      ]);
+        },
+      });
+      const completedAttempts = await prisma.attempt.count({
+        where: { userId, status: { in: ["SUBMITTED", "TIMED_OUT", "CHEATED"] } },
+      });
+      const inProgressAttempt = await prisma.attempt.findFirst({
+        where: { userId, status: "IN_PROGRESS" },
+        include: { exam: { select: { title: true, duration: true } } },
+      });
 
       // Calculate average score
       const avgResult = await prisma.result.aggregate({
@@ -106,14 +100,12 @@ export async function GET() {
     }
 
     if (role === "SUPER_ADMIN") {
-      const [collegeCount, trialCount, activeCount, suspendedCount] = await Promise.all([
-        prisma.college.count({ where: { deletedAt: null } }),
-        prisma.college.count({ where: { subscriptionStatus: "TRIAL", deletedAt: null } }),
-        prisma.college.count({ where: { subscriptionStatus: "ACTIVE", deletedAt: null } }),
-        prisma.college.count({
-          where: { subscriptionStatus: { in: ["SUSPENDED", "TRIAL_EXPIRED"] }, deletedAt: null },
-        }),
-      ]);
+      const collegeCount = await prisma.college.count({ where: { deletedAt: null } });
+      const trialCount = await prisma.college.count({ where: { subscriptionStatus: "TRIAL", deletedAt: null } });
+      const activeCount = await prisma.college.count({ where: { subscriptionStatus: "ACTIVE", deletedAt: null } });
+      const suspendedCount = await prisma.college.count({
+        where: { subscriptionStatus: { in: ["SUSPENDED", "TRIAL_EXPIRED"] }, deletedAt: null },
+      });
       stats = { role, collegeCount, trialCount, activeCount, suspendedCount };
     }
 
