@@ -6,33 +6,34 @@ import { orgClient } from "@/lib/api-client/org.client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Plus, 
-  Search, 
-  ClipboardList, 
-  Trash2, 
-  Clock, 
+import {
+  Plus,
+  Search,
+  ClipboardList,
+  Trash2,
+  Clock,
   ChevronRight,
   BookOpen,
   Calendar,
   AlertCircle,
-  StopCircle
+  StopCircle,
+  Loader2,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { toast } from "sonner";
 
 export default function FacultyExamsPage() {
   const { user } = useAuth();
-  
+
   const [exams, setExams] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [branches, setBranches] = useState([]);
   const [availableBatches, setAvailableBatches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  
+
   // Create Modal State
   const [isAdding, setIsAdding] = useState(false);
   const [formData, setFormData] = useState({
@@ -43,7 +44,7 @@ export default function FacultyExamsPage() {
     subjectId: "",
     semester: 1,
     branchId: "",
-    batchId: ""
+    batchId: "",
   });
 
   useEffect(() => {
@@ -55,22 +56,22 @@ export default function FacultyExamsPage() {
   async function loadInitialData() {
     setLoading(true);
     try {
-        const subRes = await orgClient.subjects.list(user.collegeId);
-        if (subRes.success) setSubjects(subRes.subjects);
+      const subRes = await orgClient.subjects.list(user.collegeId);
+      if (subRes.success) setSubjects(subRes.subjects);
 
-        const brRes = await orgClient.branches.list(user.collegeId);
-        if (brRes.success) setBranches(brRes.branches || []);
+      const brRes = await orgClient.branches.list(user.collegeId);
+      if (brRes.success) setBranches(brRes.branches || []);
 
-        const exRes = await orgClient.exams.list();
-        if (exRes.success) setExams(exRes.exams);
+      const exRes = await orgClient.exams.list();
+      if (exRes.success) setExams(exRes.exams);
     } catch (e) {
-        console.error("Load failed", e);
+      console.error("Load failed", e);
     }
     setLoading(false);
   }
 
   async function handleBranchChange(branchId) {
-    setFormData(prev => ({ ...prev, branchId, batchId: "" }));
+    setFormData((prev) => ({ ...prev, branchId, batchId: "" }));
     setAvailableBatches([]);
     if (branchId) {
       const bRes = await orgClient.batches.list(branchId);
@@ -81,324 +82,468 @@ export default function FacultyExamsPage() {
   async function handleSubmit(e) {
     e.preventDefault();
     if (!formData.subjectId) return toast.error("Select a subject");
-    
+
     try {
-        const res = await orgClient.exams.create(formData);
-        if (res.success) {
-          setIsAdding(false);
-          setFormData({
-            title: "", description: "", duration: 60,
-            totalMarks: 100, subjectId: "", semester: 1,
-            branchId: "", batchId: ""
-          });
-          setAvailableBatches([]);
-          loadInitialData();
-        } else {
-          toast.error(res.message || "Draft creation failed");
-        }
-    } catch (e) { toast.error("Draft creation failed"); }
+      const res = await orgClient.exams.create(formData);
+      if (res.success) {
+        setIsAdding(false);
+        setFormData({
+          title: "",
+          description: "",
+          duration: 60,
+          totalMarks: 100,
+          subjectId: "",
+          semester: 1,
+          branchId: "",
+          batchId: "",
+        });
+        setAvailableBatches([]);
+        loadInitialData();
+        toast.success("Exam draft created!");
+      } else {
+        toast.error(res.message || "Draft creation failed");
+      }
+    } catch (e) {
+      toast.error("Draft creation failed");
+    }
   }
 
   async function handleDelete(id) {
     if (!confirm("Are you sure? Only DRAFT exams can be deleted.")) return;
     try {
-        const res = await orgClient.exams.delete(id);
-        if (res.success) loadInitialData();
-        else toast.error(res.message);
-    } catch (e) { toast.error("Deletion failed"); }
+      const res = await orgClient.exams.delete(id);
+      if (res.success) loadInitialData();
+      else toast.error(res.message);
+    } catch (e) {
+      toast.error("Deletion failed");
+    }
   }
 
   async function handleComplete(id) {
-    if (!confirm("Stop this active assessment immediately? All student work will be saved and sessions closed.")) return;
+    if (
+      !confirm(
+        "Stop this active assessment immediately? All student work will be saved and sessions closed."
+      )
+    )
+      return;
     try {
-        const res = await orgClient.exams.complete(id);
-        if (res.success) {
-           toast.success("Exam terminated successfully");
-           loadInitialData();
-        } else {
-           toast.error(res.message);
-        }
-    } catch (e) { toast.error("Termination failed"); }
+      const res = await orgClient.exams.complete(id);
+      if (res.success) {
+        toast.success("Exam terminated successfully");
+        loadInitialData();
+      } else {
+        toast.error(res.message);
+      }
+    } catch (e) {
+      toast.error("Termination failed");
+    }
   }
 
-  const filteredExams = (exams || []).filter(ex => 
+  const filteredExams = (exams || []).filter((ex) =>
     ex.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const formatDateTime = (date) => {
     if (!date) return null;
-    return new Date(date).toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
+    return new Date(date).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
-  const getStatusColor = (status, startTime, endTime) => {
+  const getStatusConfig = (status, startTime, endTime) => {
     const now = new Date();
-    
-    // Auto-complete if endTime is passed
-    if ((status === 'ACTIVE' || status === 'PUBLISHED') && endTime && new Date(endTime) < now) {
-      return 'bg-slate-100 text-slate-500 border-slate-200';
+    if (
+      (status === "ACTIVE" || status === "PUBLISHED") &&
+      endTime &&
+      new Date(endTime) < now
+    ) {
+      return { cls: "bg-slate-700 text-slate-400", label: "COMPLETED" };
     }
-
-    if (status === 'PUBLISHED' && startTime && new Date(startTime) > now) {
-      return 'bg-amber-50 text-amber-600 border-amber-200';
+    if (
+      status === "PUBLISHED" &&
+      startTime &&
+      new Date(startTime) > now
+    ) {
+      return { cls: "bg-amber-500/15 text-amber-400", label: "SCHEDULED" };
     }
     switch (status) {
-      case 'DRAFT': return 'bg-slate-100 text-slate-600 border-slate-200';
-      case 'PUBLISHED': return 'bg-indigo-50 text-indigo-700 border-indigo-100';
-      case 'ACTIVE': return 'bg-emerald-100 text-emerald-800 border-emerald-200 animate-pulse';
-      case 'COMPLETED': return 'bg-slate-100 text-slate-500 border-slate-200';
-      default: return 'bg-muted text-muted-foreground';
+      case "DRAFT":
+        return { cls: "bg-slate-700 text-slate-300", label: "DRAFT" };
+      case "PUBLISHED":
+        return { cls: "bg-indigo-500/20 text-indigo-400", label: "PUBLISHED" };
+      case "ACTIVE":
+        return {
+          cls: "bg-emerald-500/20 text-emerald-400 animate-pulse",
+          label: "LIVE",
+        };
+      case "COMPLETED":
+        return { cls: "bg-slate-700 text-slate-400", label: "COMPLETED" };
+      default:
+        return { cls: "bg-slate-700 text-slate-400", label: status };
     }
   };
 
+  const selectClass =
+    "w-full h-11 rounded-xl border border-slate-700 bg-slate-800 text-slate-200 px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all";
+
   return (
-    <div className="space-y-8 container mx-auto pb-12">
-      <header className="flex items-center justify-between">
+    <div className="space-y-8 max-w-6xl mx-auto pb-12">
+      {/* Header */}
+      <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-           <div className="bg-indigo-600 p-3 rounded-2xl shadow-lg transition-transform hover:scale-105">
-              <ClipboardList className="w-8 h-8 text-white" />
-           </div>
-           <div>
-              <h1 className="text-3xl font-black tracking-tight">Assessment Console</h1>
-              <p className="text-muted-foreground mt-1 font-medium tracking-tight">Design, schedule, and snapshot institutional exams.</p>
-           </div>
+          <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center">
+            <ClipboardList className="w-6 h-6 text-indigo-400" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-100">
+              Assessment Console
+            </h1>
+            <p className="text-slate-400 mt-0.5 text-sm">
+              Design, schedule, and manage your exams.
+            </p>
+          </div>
         </div>
-        <Button 
-          onClick={() => setIsAdding(true)} 
-          className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold h-12 px-6 rounded-xl shadow-lg transition-all active:scale-95"
+        <button
+          onClick={() => setIsAdding(true)}
+          className="shrink-0 inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2.5 rounded-xl transition-all active:scale-95"
         >
-          <Plus className="w-5 h-5 mr-2" /> Design New Exam
-        </Button>
-      </header>
-
-      {isAdding && (
-        <Card className="border-2 border-indigo-500/20 shadow-2xl overflow-hidden relative animate-in slide-in-from-top-4 duration-300">
-          <div className="h-1.5 bg-indigo-600 w-full" />
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-               <CardTitle className="text-xl font-bold">Initiate Assessment Draft</CardTitle>
-               <CardDescription>Define the core parameters and context for this exam.</CardDescription>
-            </div>
-            <Button variant="ghost" size="sm" onClick={() => setIsAdding(false)} className="rounded-full text-muted-foreground hover:text-indigo-600 transition-colors">
-               Cancel
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="grid md:grid-cols-2 gap-8">
-                 <div className="space-y-4">
-                    <div className="space-y-2">
-                       <Label className="font-bold text-indigo-900 dark:text-indigo-100">Exam Title</Label>
-                       <Input 
-                          placeholder="e.g. Mid-Semester Theory Exam 2024"
-                          value={formData.title}
-                          onChange={(e) => setFormData({...formData, title: e.target.value})}
-                          required
-                       />
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="font-bold text-indigo-900 dark:text-indigo-100">Academic Subject</Label>
-                      <select 
-                        className="w-full h-11 rounded-xl border border-muted-foreground/20 bg-background px-3 py-2 text-sm focus:ring-4 focus:ring-indigo-100 transition-all font-medium"
-                        value={formData.subjectId}
-                        onChange={(e) => setFormData({...formData, subjectId: e.target.value})}
-                        required
-                      >
-                        <option value="">-- Choose Subject --</option>
-                        {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="font-bold text-indigo-900 dark:text-indigo-100">Target Branch</Label>
-                      <select
-                        className="w-full h-11 rounded-xl border border-muted-foreground/20 bg-background px-3 py-2 text-sm focus:ring-4 focus:ring-indigo-100 transition-all font-medium"
-                        value={formData.branchId}
-                        onChange={(e) => handleBranchChange(e.target.value)}
-                      >
-                        <option value="">All Branches (College-Wide)</option>
-                        {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                      </select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="font-bold text-indigo-900 dark:text-indigo-100">
-                        Target Batch <span className="font-normal text-muted-foreground text-xs">(optional)</span>
-                      </Label>
-                      <select
-                        className="w-full h-11 rounded-xl border border-muted-foreground/20 bg-background px-3 py-2 text-sm focus:ring-4 focus:ring-indigo-100 transition-all font-medium disabled:opacity-40 disabled:cursor-not-allowed"
-                        value={formData.batchId}
-                        onChange={(e) => setFormData({...formData, batchId: e.target.value})}
-                        disabled={!formData.branchId}
-                      >
-                        <option value="">All Students in Branch</option>
-                        {availableBatches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                      </select>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                       <div className="space-y-2">
-                          <Label className="font-bold text-indigo-900 dark:text-indigo-100">Duration (Mins)</Label>
-                          <Input 
-                             type="number"
-                             value={formData.duration}
-                             onChange={(e) => setFormData({...formData, duration: e.target.value})}
-                             required
-                          />
-                       </div>
-                       <div className="space-y-2">
-                          <Label className="font-bold text-indigo-900 dark:text-indigo-100">Semester</Label>
-                          <Input 
-                             type="number"
-                             value={formData.semester}
-                             onChange={(e) => setFormData({...formData, semester: e.target.value})}
-                             required
-                          />
-                       </div>
-                    </div>
-                 </div>
-                 <div className="space-y-4">
-                    <div className="space-y-2">
-                       <Label className="font-bold text-indigo-900 dark:text-indigo-100">Description / Instructions</Label>
-                       <textarea 
-                          className="w-full h-[152px] rounded-xl border border-muted-foreground/20 bg-background px-4 py-3 text-sm focus:ring-4 focus:ring-indigo-100 transition-all outline-none"
-                          placeholder="Guidelines for students appearing in the exam..."
-                          value={formData.description}
-                          onChange={(e) => setFormData({...formData, description: e.target.value})}
-                       />
-                    </div>
-                    <div className="space-y-2">
-                        <Label className="font-bold text-indigo-900 dark:text-indigo-100">Total Marks (Cap)</Label>
-                        <Input 
-                           type="number"
-                           value={formData.totalMarks}
-                           onChange={(e) => setFormData({...formData, totalMarks: e.target.value})}
-                           required
-                        />
-                    </div>
-                 </div>
-              </div>
-              <Button type="submit" className="w-full h-14 bg-slate-900 hover:bg-slate-800 text-white font-bold text-lg rounded-2xl shadow-xl transition-all active:scale-[0.98]">
-                 Initialize Assessment Build
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Registry Search */}
-      <div className="relative group">
-         <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground group-focus-within:text-indigo-600 transition-colors" />
-         <Input 
-            placeholder="Search by assessment title..." 
-            className="pl-12 h-14 text-lg rounded-2xl border-muted/20 shadow-sm focus:ring-4 focus:ring-indigo-50 transition-all bg-card"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-         />
+          <Plus className="w-4 h-4" /> New Exam
+        </button>
       </div>
 
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-         {loading ? (
-            <div className="col-span-full py-20 text-center animate-pulse text-muted-foreground font-black uppercase tracking-widest italic">Decrypting examination catalog...</div>
-         ) : filteredExams.length === 0 ? (
-            <div className="col-span-full py-24 text-center border-2 border-dashed rounded-[32px] bg-muted/20 flex flex-col items-center">
-               <AlertCircle className="w-12 h-12 text-muted-foreground opacity-20 mb-4" />
-               <h3 className="text-xl font-bold text-muted-foreground uppercase tracking-tight">Registry Empty</h3>
-               <p className="text-muted-foreground mt-2 max-w-xs font-medium italic">Initiate your first draft assessment to begin the examination lifecycle.</p>
+      {/* Create Form */}
+      {isAdding && (
+        <div className="bg-slate-900 border border-indigo-500/20 rounded-2xl overflow-hidden animate-in slide-in-from-top-4 duration-300">
+          <div className="h-0.5 bg-gradient-to-r from-indigo-600 to-indigo-400 w-full" />
+          <div className="p-6">
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <h2 className="text-lg font-bold text-slate-100">
+                  Create Exam Draft
+                </h2>
+                <p className="text-slate-500 text-sm mt-0.5">
+                  Define the core parameters for this assessment.
+                </p>
+              </div>
+              <button
+                onClick={() => setIsAdding(false)}
+                className="w-8 h-8 rounded-full flex items-center justify-center text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-         ) : filteredExams.map((ex) => (
-            <Card key={ex.id} className="group relative overflow-hidden shadow-sm hover:shadow-2xl transition-all border-muted/20 hover:border-indigo-500/20 rounded-[28px] flex flex-col">
-               <div className="p-1.5 flex flex-col h-full">
-                  <div className="p-6 pb-4 space-y-4 flex-1">
-                     <div className="flex items-center justify-between">
-                        <Badge variant="outline" className={`font-black tracking-widest uppercase text-[10px] py-1 border-opacity-50 ${getStatusColor(ex.status, ex.startTime, ex.endTime)}`}>
-                           {ex.endTime && new Date(ex.endTime) < new Date() && (ex.status === 'ACTIVE' || ex.status === 'PUBLISHED') ? 'COMPLETED' : 
-                            (ex.status === 'PUBLISHED' && ex.startTime && new Date(ex.startTime) > new Date() ? 'SCHEDULED' : ex.status)}
-                        </Badge>
-                        <div className="flex items-center gap-1.5 text-muted-foreground text-[10px] font-black uppercase tracking-tighter">
-                           <Clock className="w-3.5 h-3.5" />
-                           {ex.duration} Mins
-                        </div>
-                     </div>
-                     
-                     <Link href={`/dashboard/teacher/exams/${ex.id}`}>
-                        <h2 className="text-xl font-black leading-tight text-slate-800 dark:text-white group-hover:text-indigo-600 transition-colors line-clamp-2">
-                           {ex.title}
-                        </h2>
-                     </Link>
+            <form onSubmit={handleSubmit} className="space-y-5">
+              <div className="grid md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-slate-400 text-xs font-medium">
+                      Exam Title
+                    </Label>
+                    <input
+                      className="w-full h-10 rounded-xl border border-slate-700 bg-slate-800 text-slate-100 placeholder:text-slate-600 px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      placeholder="e.g. Mid-Semester Theory Exam 2024"
+                      value={formData.title}
+                      onChange={(e) =>
+                        setFormData({ ...formData, title: e.target.value })
+                      }
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-slate-400 text-xs font-medium">
+                      Academic Subject
+                    </Label>
+                    <select
+                      className={selectClass}
+                      value={formData.subjectId}
+                      onChange={(e) =>
+                        setFormData({ ...formData, subjectId: e.target.value })
+                      }
+                      required
+                    >
+                      <option value="">-- Choose Subject --</option>
+                      {subjects.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-slate-400 text-xs font-medium">
+                      Target Branch
+                    </Label>
+                    <select
+                      className={selectClass}
+                      value={formData.branchId}
+                      onChange={(e) => handleBranchChange(e.target.value)}
+                    >
+                      <option value="">All Branches (College-Wide)</option>
+                      {branches.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-slate-400 text-xs font-medium">
+                      Target Batch{" "}
+                      <span className="text-slate-600">(optional)</span>
+                    </Label>
+                    <select
+                      className={`${selectClass} disabled:opacity-40 disabled:cursor-not-allowed`}
+                      value={formData.batchId}
+                      onChange={(e) =>
+                        setFormData({ ...formData, batchId: e.target.value })
+                      }
+                      disabled={!formData.branchId}
+                    >
+                      <option value="">All Students in Branch</option>
+                      {availableBatches.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-slate-400 text-xs font-medium">
+                        Duration (Mins)
+                      </Label>
+                      <input
+                        className="w-full h-10 rounded-xl border border-slate-700 bg-slate-800 text-slate-100 px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                        type="number"
+                        value={formData.duration}
+                        onChange={(e) =>
+                          setFormData({ ...formData, duration: e.target.value })
+                        }
+                        required
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-slate-400 text-xs font-medium">
+                        Semester
+                      </Label>
+                      <input
+                        className="w-full h-10 rounded-xl border border-slate-700 bg-slate-800 text-slate-100 px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                        type="number"
+                        value={formData.semester}
+                        onChange={(e) =>
+                          setFormData({ ...formData, semester: e.target.value })
+                        }
+                        required
+                      />
+                    </div>
+                  </div>
+                </div>
 
-                     <div className="grid grid-cols-2 gap-2 pt-2">
-                        <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
-                           <BookOpen className="w-4 h-4 text-indigo-400" />
-                           <span className="truncate">{ex.subject?.name}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground">
-                           <Calendar className="w-4 h-4 text-indigo-400" />
-                           <span>Sem {ex.semester}</span>
-                        </div>
-                     </div>
+                <div className="space-y-4">
+                  <div className="space-y-1.5">
+                    <Label className="text-slate-400 text-xs font-medium">
+                      Description / Instructions
+                    </Label>
+                    <textarea
+                      className="w-full h-36 rounded-xl border border-slate-700 bg-slate-800 text-slate-100 placeholder:text-slate-600 px-3 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
+                      placeholder="Guidelines for students appearing in the exam..."
+                      value={formData.description}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          description: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-slate-400 text-xs font-medium">
+                      Total Marks
+                    </Label>
+                    <input
+                      className="w-full h-10 rounded-xl border border-slate-700 bg-slate-800 text-slate-100 px-3 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      type="number"
+                      value={formData.totalMarks}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          totalMarks: e.target.value,
+                        })
+                      }
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+              <button
+                type="submit"
+                className="w-full h-11 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-xl transition-all active:scale-[0.98]"
+              >
+                Initialize Assessment Draft
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
-                     {(ex.startTime || ex.endTime) && (
-                        <div className="pt-4 space-y-2 border-t border-muted/5">
-                           <div className="text-[9px] font-black uppercase text-muted-foreground/40 tracking-widest">Schedule Window</div>
-                           <div className="grid grid-cols-2 gap-2">
-                              {ex.startTime && (
-                                 <div className="flex flex-col">
-                                    <span className="text-[8px] font-bold text-muted-foreground/60 uppercase">Starts</span>
-                                    <span className="text-[10px] font-black">{formatDateTime(ex.startTime)}</span>
-                                 </div>
-                              )}
-                              {ex.endTime && (
-                                 <div className="flex flex-col">
-                                    <span className="text-[8px] font-bold text-muted-foreground/60 uppercase">Ends</span>
-                                    <span className="text-[10px] font-black">{formatDateTime(ex.endTime)}</span>
-                                 </div>
-                              )}
-                           </div>
-                        </div>
-                     )}
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+        <input
+          className="w-full h-11 pl-11 pr-4 rounded-xl border border-slate-800 bg-slate-900 text-slate-200 placeholder:text-slate-600 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+          placeholder="Search by assessment title..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+      </div>
+
+      {/* Exam Grid */}
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {loading ? (
+          <div className="col-span-full flex items-center justify-center py-20 gap-3 text-slate-500">
+            <Loader2 className="w-5 h-5 animate-spin text-indigo-400" />
+            <span className="text-sm font-medium">Loading exams...</span>
+          </div>
+        ) : filteredExams.length === 0 ? (
+          <div className="col-span-full py-20 text-center border border-dashed border-slate-800 rounded-2xl bg-slate-900/50 flex flex-col items-center gap-3">
+            <div className="w-14 h-14 rounded-2xl bg-slate-800 flex items-center justify-center">
+              <AlertCircle className="w-7 h-7 text-slate-600" />
+            </div>
+            <p className="text-slate-400 font-medium">No exams found</p>
+            <p className="text-slate-600 text-sm max-w-xs">
+              Create your first exam draft to get started.
+            </p>
+            <button
+              onClick={() => setIsAdding(true)}
+              className="mt-2 inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-xl transition-all"
+            >
+              <Plus className="w-4 h-4" /> Create Exam
+            </button>
+          </div>
+        ) : (
+          filteredExams.map((ex) => {
+            const { cls: statusCls, label: statusLabel } = getStatusConfig(
+              ex.status,
+              ex.startTime,
+              ex.endTime
+            );
+            const isExpired =
+              ex.endTime &&
+              new Date(ex.endTime) < new Date() &&
+              (ex.status === "ACTIVE" || ex.status === "PUBLISHED");
+
+            return (
+              <div
+                key={ex.id}
+                className="group bg-slate-900 border border-slate-800 hover:border-slate-700 rounded-2xl flex flex-col overflow-hidden transition-all"
+              >
+                <div className="p-5 flex-1 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span
+                      className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wider uppercase ${statusCls}`}
+                    >
+                      {statusLabel}
+                    </span>
+                    <div className="flex items-center gap-1.5 text-slate-500 text-xs">
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>{ex.duration}m</span>
+                    </div>
                   </div>
 
-                  <div className="mt-auto px-6 py-4 flex items-center justify-between border-t border-dashed bg-muted/5 group-hover:bg-indigo-50/10 transition-colors">
-                     <div className="flex -space-x-2">
-                        <div className="w-8 h-8 rounded-full border-2 border-white bg-indigo-100 flex items-center justify-center text-[10px] font-bold text-indigo-700">
-                           {ex._count.questions}
-                        </div>
-                        <div className="text-[10px] font-bold text-muted-foreground ml-4 flex items-center">
-                           Questions
-                        </div>
-                     </div>
-                     
-                     <div className="flex items-center gap-1">
-                        {(ex.status === 'COMPLETED' || (ex.endTime && new Date(ex.endTime) < new Date())) && (
-                           <Link href={`/dashboard/teacher/grading/${ex.id}`}>
-                              <Button variant="outline" size="sm" className="h-9 px-4 rounded-xl border-dashed border-indigo-200 text-indigo-600 hover:bg-indigo-50 font-black uppercase text-[9px] flex gap-2">
-                                 <ClipboardList className="w-3.5 h-3.5" />
-                                 Results
-                              </Button>
-                           </Link>
-                        )}
-                        {ex.status === 'DRAFT' && (
-                           <Button variant="ghost" size="icon" onClick={() => handleDelete(ex.id)} className="h-9 w-9 text-muted-foreground hover:text-rose-600 hover:bg-rose-50 transition-colors rounded-full">
-                              <Trash2 className="w-4 h-4" />
-                           </Button>
-                        )}
-                        {ex.status === 'ACTIVE' && (!ex.endTime || new Date(ex.endTime) > new Date()) && (
-                           <Button variant="ghost" size="icon" onClick={() => handleComplete(ex.id)} className="h-9 w-9 text-rose-500 hover:bg-rose-50 transition-colors rounded-full">
-                              <StopCircle className="w-5 h-5" />
-                           </Button>
-                        )}
-                        <Link href={`/dashboard/teacher/exams/${ex.id}`}>
-                           <Button size="icon" className="h-9 w-9 bg-slate-900 hover:bg-slate-800 text-white rounded-full shadow-lg transition-transform hover:scale-105 active:scale-95">
-                              <ChevronRight className="w-5 h-5" />
-                           </Button>
-                        </Link>
-                     </div>
+                  <Link href={`/dashboard/teacher/exams/${ex.id}`}>
+                    <h2 className="text-slate-100 font-semibold text-base leading-snug group-hover:text-indigo-400 transition-colors line-clamp-2 cursor-pointer">
+                      {ex.title}
+                    </h2>
+                  </Link>
+
+                  <div className="flex items-center gap-4 pt-1">
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <BookOpen className="w-3.5 h-3.5 text-indigo-400" />
+                      <span className="truncate">{ex.subject?.name}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                      <Calendar className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>Sem {ex.semester}</span>
+                    </div>
                   </div>
-               </div>
-            </Card>
-         ))}
+
+                  {(ex.startTime || ex.endTime) && (
+                    <div className="pt-3 border-t border-slate-800 grid grid-cols-2 gap-2">
+                      {ex.startTime && (
+                        <div>
+                          <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-600">
+                            Starts
+                          </p>
+                          <p className="text-xs font-medium text-slate-400 mt-0.5">
+                            {formatDateTime(ex.startTime)}
+                          </p>
+                        </div>
+                      )}
+                      {ex.endTime && (
+                        <div>
+                          <p className="text-[9px] font-semibold uppercase tracking-wider text-slate-600">
+                            Ends
+                          </p>
+                          <p className="text-xs font-medium text-slate-400 mt-0.5">
+                            {formatDateTime(ex.endTime)}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="px-5 py-3 flex items-center justify-between border-t border-slate-800 bg-slate-900/50">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-indigo-500/10 flex items-center justify-center text-[11px] font-bold text-indigo-400">
+                      {ex._count.questions}
+                    </div>
+                    <span className="text-[11px] font-medium text-slate-500">
+                      Questions
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    {(ex.status === "COMPLETED" || isExpired) && (
+                      <Link href={`/dashboard/teacher/grading/${ex.id}`}>
+                        <button className="h-8 px-3 rounded-lg border border-indigo-500/20 text-indigo-400 hover:bg-indigo-500/10 text-[10px] font-semibold uppercase tracking-wider flex items-center gap-1.5 transition-all">
+                          <ClipboardList className="w-3.5 h-3.5" />
+                          Results
+                        </button>
+                      </Link>
+                    )}
+                    {ex.status === "DRAFT" && (
+                      <button
+                        onClick={() => handleDelete(ex.id)}
+                        className="w-8 h-8 rounded-lg text-slate-600 hover:text-rose-400 hover:bg-rose-500/10 flex items-center justify-center transition-all"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                    {ex.status === "ACTIVE" &&
+                      (!ex.endTime || new Date(ex.endTime) > new Date()) && (
+                        <button
+                          onClick={() => handleComplete(ex.id)}
+                          className="w-8 h-8 rounded-lg text-rose-400 hover:bg-rose-500/10 flex items-center justify-center transition-all"
+                        >
+                          <StopCircle className="w-4 h-4" />
+                        </button>
+                      )}
+                    <Link href={`/dashboard/teacher/exams/${ex.id}`}>
+                      <button className="w-8 h-8 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white flex items-center justify-center transition-all active:scale-95">
+                        <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
     </div>
   );

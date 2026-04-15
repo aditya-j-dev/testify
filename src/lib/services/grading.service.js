@@ -370,3 +370,38 @@ export async function getStudentResultSummary(studentId) {
     gpaBySemester
   };
 }
+
+export async function getStudentAttemptDetail(studentId, attemptId) {
+  const attempt = await prisma.attempt.findUnique({
+    where: { id: attemptId },
+    include: {
+      exam: {
+        include: {
+          questions: {
+            include: { 
+              question: {
+                include: { options: true }
+              } 
+            },
+            orderBy: { order: 'asc' }
+          }
+        }
+      },
+      user: {
+        select: { name: true, email: true }
+      },
+      answers: {
+        include: {
+          question: true
+        }
+      },
+      result: true
+    }
+  });
+
+  if (!attempt) throw new Error("Attempt not found");
+  // Security check: ensure student owns this attempt
+  if (attempt.userId !== studentId) throw new Error("Unauthorized to view this attempt");
+
+  return attempt;
+}
