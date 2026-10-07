@@ -283,19 +283,19 @@ export default function StudentExamsPage() {
 
               const statusConfig = isCheated
                 ? {
-                    cls: "bg-rose-500/10 border-rose-500/20 text-rose-400",
-                    Icon: ShieldAlert,
-                    label: "Violation",
-                    sub: "Terminated for breach",
-                  }
+                  cls: "bg-rose-500/10 border-rose-500/20 text-rose-400",
+                  Icon: ShieldAlert,
+                  label: "Violation",
+                  sub: "Terminated for breach",
+                }
                 : isAttempted
-                ? {
+                  ? {
                     cls: "bg-emerald-500/10 border-emerald-500/20 text-emerald-400",
                     Icon: CheckCircle2,
                     label: "Attempted",
                     sub: attempt.status === "TIMED_OUT" ? "Timed out" : "Submitted",
                   }
-                : {
+                  : {
                     cls: "bg-slate-800 border-slate-700 text-slate-500",
                     Icon: XCircle,
                     label: "Not Attempted",
@@ -305,9 +305,8 @@ export default function StudentExamsPage() {
               return (
                 <div
                   key={exam.id}
-                  className={`bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3 transition-all ${
-                    isMissed ? "opacity-60" : ""
-                  }`}
+                  className={`bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3 transition-all ${isMissed ? "opacity-60" : ""
+                    }`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <span className="inline-flex px-2 py-0.5 rounded-full bg-slate-800 border border-slate-700 text-[10px] font-medium text-slate-500">
